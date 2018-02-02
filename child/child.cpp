@@ -20,7 +20,7 @@ int main(int argcv, char* argv[])
 	cout << "[child] Writing to file" << endl;
 
 	ofile.open("file.txt");
-	ofile << "Written by process #" << GetCurrentProcessId() << endl;
+	ofile << "File written by process #" << GetCurrentProcessId() << endl;
 	ofile.close();
 
 	cout << "[child] Writing process terminated" << endl;

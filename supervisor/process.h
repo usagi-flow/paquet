@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <memory>
 #include <windows.h>
 #include <psapi.h>
 #include "runtime-exception.h"
@@ -12,7 +13,7 @@ class Process
 {
 	public:
 		Process(const char * name);
-		virtual ~Process();
+		virtual ~Process() noexcept(false);
 
 		virtual void start();
 		virtual void start(bool startSuspended);
@@ -25,13 +26,20 @@ class Process
 
 		void writeMemory(void * buffer, size_t size, void * destination);
 
-		CONTEXT GetMainThreadContext();
+		/**
+		 * Retrieves the thread context of the main process thread. Requires the main thread to be suspended.
+		 */
+		std::shared_ptr<CONTEXT> getMainThreadContext() const;
 
 	protected:
 		const char * name;
 		PROCESS_INFORMATION processInfo;
+		std::shared_ptr<CONTEXT> threadContext;
 
-		void dumpRegisters(const CONTEXT * threadContext);
+		void dumpRegisters() const;
+		void dumpRegisters(const CONTEXT * threadContext) const;
+
+		void readMainThreadContext();
 };
 
 #endif

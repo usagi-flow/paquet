@@ -53,9 +53,9 @@ int run(int argc, char* argv[])
 
 	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
 
-	process.start(false);
-	//Sleep(500);
-	//process.resume();
+	process.start(true);
+	Sleep(500);
+	process.resume();
 	Sleep(500);
 
 	return 0;
