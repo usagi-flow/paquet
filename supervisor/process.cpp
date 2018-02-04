@@ -25,7 +25,6 @@ Process::~Process() noexcept(false)
 		cout << "[parent] Destruction succeeded" << endl;
 
 		memset(&(this->processInfo), 0, sizeof(this->processInfo));
-		this->threadContext.reset();
 	}
 }
 
@@ -67,6 +66,8 @@ void Process::start(bool startSuspended)
 	cout << "[parent] - Thread ID:      0x" << this->processInfo.dwThreadId << endl;
 	cout << dec;
 
+	//this->analyzeMemory();
+
 	if (startSuspended)
 	{
 		cout << "[parent] Process started in suspended mode" << endl;
@@ -79,8 +80,8 @@ void Process::resume()
 {
 	cout << "[parent] Resuming child thread" << endl;
 
-	this->threadContext.reset();
-	//memset(&(this->threadContext), 0, sizeof(this->threadContext));
+	memset(this->threadContext.get(), 0x0, sizeof(CONTEXT));
+	//this->threadContext.reset();
 
 	if (ResumeThread(processInfo.hThread) == -1)
 		throw RuntimeException("Could not resume the child thread");
@@ -126,28 +127,55 @@ void Process::writeMemory(void * buffer, size_t size, void * destination)
 	Util::printHexDump("writeMemory() buffer", buffer, size);
 }
 
+shared_ptr<CONTEXT> Process::getMainThreadContext() const
+{
+	return this->threadContext;
+}
+
+void Process::setRIP(void * rip)
+{
+	if (!this->threadContext->ContextFlags)
+		throw RuntimeException("The RIP register cannot be modified: The thread must be suspended.");
+
+	cout << "[parent] - Setting RIP to 0x" << COUT_HEX_32 << rip << endl;
+
+	this->threadContext->Rip = (unsigned long)rip;
+
+	if (SetThreadContext(this->processInfo.hThread, this->threadContext.get()))
+		cout << "[parent] - Updated the thread context" << endl;
+	else
+		throw RuntimeException("Could not modify the thread context");
+}
+
+void Process::analyzeMemory()
+{
+	this->memoryInfo = make_shared<MEMORY_BASIC_INFORMATION>();
+	memset(this->memoryInfo.get(), 0x0, sizeof(MEMORY_BASIC_INFORMATION));
+
+	if (VirtualQueryEx(this->processInfo.hProcess, 0x0, this->memoryInfo.get(), sizeof(MEMORY_BASIC_INFORMATION)))
+		cout << "[parent] - Retrieved the memory info" << endl;
+	else
+		throw RuntimeException("Could not retrieve the memory info");
+
+	cout << "[parent]   - Base address:         0x" << COUT_HEX_32 << this->memoryInfo->BaseAddress << endl;
+	cout << "[parent]   - Allocation base:      0x" << COUT_HEX_32 << this->memoryInfo->AllocationBase << endl;
+	cout << "[parent]   - Allocation protect:   0x" << COUT_HEX_32 << this->memoryInfo->AllocationProtect << endl;
+	cout << "[parent]   - Region size:          0x" << COUT_HEX_32 << this->memoryInfo->RegionSize << endl;
+	cout << "[parent]   - State:                0x" << COUT_HEX_32 << this->memoryInfo->State << endl;
+	cout << "[parent]   - Protect:              0x" << COUT_HEX_32 << this->memoryInfo->Protect << endl;
+	cout << "[parent]   - Type:                 0x" << COUT_HEX_32 << this->memoryInfo->Type << endl;
+}
+
 void Process::readMainThreadContext()
 {
-	/*CONTEXT context;
-
-	GetThreadContext(this->processInfo.hThread, &context);
-	cout << "[parent] - RIP: 0x" << COUT_HEX_32 << context.Rip << endl;*/
-
 	this->threadContext = make_shared<CONTEXT>();
+	memset(this->threadContext.get(), 0x0, sizeof(CONTEXT));
+	this->threadContext->ContextFlags = CONTEXT_ALL;
 
 	if (GetThreadContext(this->processInfo.hThread, this->threadContext.get()))
 		cout << "[parent] - Retrieved the child thread context" << endl;
 	else
 		throw RuntimeException("Could not retrieve the child thread context");
-	/*cout << "[parent] - RIP: 0x" << COUT_HEX_32 << this->threadContext.get()->Rip << endl;
-	this->threadContext.get()->Rip = 0xABC123;
-	(&(*this->threadContext))->Rip = 0xABC124;
-	cout << "[parent] - RIP: 0x" << COUT_HEX_32 << this->threadContext.get()->Rip << endl;*/
-}
-
-shared_ptr<CONTEXT> Process::getMainThreadContext() const
-{
-	return this->threadContext;
 }
 
 void Process::dumpRegisters() const

@@ -31,15 +31,23 @@ class Process
 		 */
 		std::shared_ptr<CONTEXT> getMainThreadContext() const;
 
+		/**
+		 * Sets the instruction pointer. Requires the main thread to be suspended.
+		 */
+		void setRIP(void * rip);
+
 	protected:
 		const char * name;
 		PROCESS_INFORMATION processInfo;
 		std::shared_ptr<CONTEXT> threadContext;
+		std::shared_ptr<MEMORY_BASIC_INFORMATION> memoryInfo;
+
+		void analyzeMemory();
+
+		void readMainThreadContext();
 
 		void dumpRegisters() const;
 		void dumpRegisters(const CONTEXT * threadContext) const;
-
-		void readMainThreadContext();
 };
 
 #endif

@@ -7,6 +7,7 @@ set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS} -static-libgcc -static-lib
 
 #add_library(Psapi main.cpp)
 add_executable(wintest main.cpp
+	supervisor/injector.cpp
 	supervisor/process.cpp
 	supervisor/runtime-exception.cpp
 	supervisor/util.cpp)
