@@ -19,8 +19,11 @@ int main(int argcv, char* argv[])
 
 	cout << "[child] Writing to file" << endl;
 
+	cout << "[child] - open()" << endl;
 	ofile.open("file.txt");
+	cout << "[child] - write()" << endl;
 	ofile << "File written by process #" << GetCurrentProcessId() << endl;
+	cout << "[child] - close()" << endl;
 	ofile.close();
 
 	cout << "[child] Writing process terminated" << endl;

@@ -1,14 +1,13 @@
 #include "process.h"
 
-#define COUT_HEX hex << uppercase 
-#define COUT_HEX_32 hex << setw(8) << setfill('0') << uppercase 
-
 using namespace std;
 
 Process::Process(const char * name)
 {
 	this->name = name;
 	memset(&(this->processInfo), 0, sizeof(this->processInfo));
+
+	cout << "[parent] * Initialized Process instance @ 0x" << COUT_HEX_32 << this << endl;
 }
 
 Process::~Process() noexcept(false)
@@ -26,6 +25,11 @@ Process::~Process() noexcept(false)
 
 		memset(&(this->processInfo), 0, sizeof(this->processInfo));
 	}
+}
+
+const char * Process::getName() const
+{
+	return this->name;
 }
 
 void Process::start()
@@ -70,9 +74,9 @@ void Process::start(bool startSuspended)
 
 	if (startSuspended)
 	{
-		cout << "[parent] Process started in suspended mode" << endl;
+		cout << "[parent] - Process started in suspended mode" << endl;
 		this->readMainThreadContext();
-		this->dumpRegisters();
+		//this->dumpRegisters();
 	}
 }
 
@@ -117,7 +121,7 @@ void Process::copyMemory(void * source, void * destination, size_t size)
 	delete[] buffer;
 }
 
-void Process::writeMemory(void * buffer, size_t size, void * destination)
+void Process::writeMemory(const void * buffer, size_t size, void * destination)
 {
 	bool success = WriteProcessMemory(this->processInfo.hProcess, destination, buffer, size, 0x0);
 

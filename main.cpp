@@ -1,11 +1,10 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include "supervisor/injector.h"
 #include "supervisor/process.h"
 
 using namespace std;
-
-typedef unsigned char byte;
 
 int run(int argc, char* argv[]);
 bool spawnProcess(const char * name, PROCESS_INFORMATION * processInfo);
@@ -51,17 +50,23 @@ int main(int argc, char* argv[])
 int run(int argc, char* argv[])
 {
 	DWORD pid = GetCurrentProcessId();
-	Process process = Process(".\\child.exe");
+
+	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
+
+	//Process process = Process(".\\child.exe");
+	shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
+	Injector injector = Injector(process);
 	void * pCodeCave;
 	DWORD64 rip;
 	byte * pRIP = (byte*)&rip;
 
-	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
+	process->start(true);
+	this_thread::sleep_for(chrono::milliseconds(250));
 
-	process.start(true);
-	this_thread::sleep_for(chrono::milliseconds(500));
+	injector.performInjections();
 
-	rip = process.getMainThreadContext()->Rip;
+	// Test code: create minimal code cave and invoke it before RtlUserThreadStart
+	/*rip = process->getMainThreadContext()->Rip;
 
 	byte codeCave[] = {
 		// MOV EAX, 00260000 => B8 00 00 26 00 (Endian!)
@@ -72,19 +77,19 @@ int run(int argc, char* argv[])
 	};
 
 	// Allocate memory for the code cave
-	pCodeCave = process.allocateMemory(sizeof(codeCave));
+	pCodeCave = process->allocateMemory(sizeof(codeCave));
 
 	// Write the code cave
-	process.writeMemory(codeCave, sizeof(codeCave), pCodeCave);
+	process->writeMemory(codeCave, sizeof(codeCave), pCodeCave);
 
 	// Set the IP to point to the code cave
-	process.setRIP(pCodeCave);
+	process->setRIP(pCodeCave);*/
 
 	//cin.get();
-	this_thread::sleep_for(chrono::milliseconds(500));
+	this_thread::sleep_for(chrono::milliseconds(250));
 
-	process.resume();
-	this_thread::sleep_for(chrono::milliseconds(500));
+	process->resume();
+	this_thread::sleep_for(chrono::milliseconds(250));
 
 	return 0;
 }

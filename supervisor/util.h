@@ -6,7 +6,7 @@
 class Util
 {
 	public:
-		static void printHexDump(const char * description, void * address, int length);
+		static void printHexDump(const char * description, const void * address, int length);
 };
 
 #endif

@@ -1,6 +1,6 @@
 #include "util.h"
 
-void Util::printHexDump(const char * description, void * address, int length)
+void Util::printHexDump(const char * description, const void * address, int length)
 {
 	int i;
 	unsigned char buff[17];
