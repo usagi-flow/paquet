@@ -29,7 +29,7 @@ byte& CodeCave::operator[](int i)
 	return (*this->data)[i];
 }
 
-const byte * CodeCave::getRawData() const
+byte * CodeCave::getRawData()
 {
 	return this->data->data();
 }

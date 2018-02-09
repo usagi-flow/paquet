@@ -27,10 +27,20 @@ Injector::~Injector() noexcept(false)
 
 void Injector::performInjections()
 {
+	void * address;
+	byte jumpInstruction[] = {0x0, 0x0, 0x0, 0x0, 0x0};
+
 	this->analyzeProcess();
 	this->prepareCodeCaves();
+
 	//this->inject(this->cave_NtOpenFile);
+
+	// Write code cave with jump back to initialRIP + 5
 	this->inject(this->cave_RtlUserThreadStart);
+
+	// Write jump to code cave
+	this->writeJumpNear(jumpInstruction, 0, this->initialRIP, this->cave_RtlUserThreadStart->getAddress());
+	//this->process->writeMemory(jumpInstruction, sizeof(jumpInstruction), this->initialRIP);
 }
 
 void Injector::analyzeProcess()
@@ -65,21 +75,57 @@ void Injector::prepareCodeCaves()
 
 	this->cave_RtlUserThreadStart = make_shared<CodeCave>(size);
 	this->cave_RtlUserThreadStart->setAddress(address);
-	this->writeJumpNear(this->cave_RtlUserThreadStart, i, address, this->initialRIP);
+	this->writeJumpNear(this->cave_RtlUserThreadStart->getRawData(), i, address, (void*)((size_t)this->initialRIP + 5));
 }
 
-void Injector::inject(std::shared_ptr<CodeCave> codeCave)
+void Injector::writeJumpNear(byte * buffer, size_t offset, void * source, void * destination)
 {
-	/*void * address = this->process->allocateMemory(codeCave->getSize());
+	// General notes:
+	// EB:		Jump short	(jump -128 to 127 of the IP)
+	// E9:		Jump near	(jump within the code segment)
+	// FF/EA:	Jump far	(intersegment jump, same privilege level)
 
-	codeCavecodeCave->setAddress(address);*/
+	// From 00330000:
+	// JMP 76DF15E0 => E9 DB15AC76
+	// Because dest 76DF15E0 - (00330000 + [5]) = 76AC15DB
 
+	// From 00260000:
+	// JMP 76DCC520 => E9 1BC5B676
+	// Because dest 76DCC520 - (00260000 + [5]) = 0x76B6C51B
+
+	// From 00330200:
+	// JMP 00330000 => E9 FBFDFFFF
+	// Because FFFFFFFF - (00330200 + [4/5] - 00330000) = 0xFFFFFDFB
+	// * Why -1?
+
+	const size_t instructionSize = 5;
+	size_t addressOffset;
+	byte * addressOffsetBytes = (byte*)&addressOffset;
+
+	buffer[offset] = 0xE9;
+
+	if ((size_t)destination >= (size_t)source)
+	{
+		cout << "[parent] - destination >= source" << endl;
+		addressOffset = (size_t)destination - ((size_t)source + instructionSize);
+	}
+	else
+	{
+		cout << "[parent] - destination < source" << endl;
+		addressOffset = 0xFFFFFFFF - ((size_t)source + instructionSize - 1 - (size_t)destination);
+	}
+
+	buffer[offset + 1] = addressOffsetBytes[0];
+	buffer[offset + 2] = addressOffsetBytes[1];
+	buffer[offset + 3] = addressOffsetBytes[2];
+	buffer[offset + 4] = addressOffsetBytes[3];
+}
+
+void Injector::inject(shared_ptr<CodeCave> codeCave)
+{
 	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getAddress());
 
 	cout << "[parent] - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
 		dec << COUT_HEX_32 << codeCave->getAddress() << endl;
-}
 
-void Injector::writeJumpNear(std::shared_ptr<CodeCave>, size_t & index, void * source, void * destination)
-{
 }

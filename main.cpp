@@ -85,7 +85,7 @@ int run(int argc, char* argv[])
 	// Set the IP to point to the code cave
 	process->setRIP(pCodeCave);*/
 
-	//cin.get();
+	cin.get();
 	this_thread::sleep_for(chrono::milliseconds(250));
 
 	process->resume();

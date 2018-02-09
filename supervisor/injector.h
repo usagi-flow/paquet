@@ -24,9 +24,8 @@ class Injector
 
 		virtual void analyzeProcess();
 		virtual void prepareCodeCaves();
+		virtual void writeJumpNear(byte * buffer, size_t offset, void * source, void * destination);
 		virtual void inject(std::shared_ptr<CodeCave> codeCave);
-
-		virtual void writeJumpNear(std::shared_ptr<CodeCave>, size_t & index, void * source, void * destination);
 };
 
 #endif

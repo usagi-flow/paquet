@@ -15,10 +15,16 @@ class CodeCave
 
 		byte& operator[](int i);
 
-		virtual const byte * getRawData() const;
+		virtual byte * getRawData();
 
 		virtual void * getAddress() const;
 		virtual void setAddress(void * address);
+
+		virtual void * getSourceAddress() const;
+		virtual void setSourceAddress(void * address);
+
+		virtual void * getDestinationAddress() const;
+		virtual void setDestinationAddress(void * address);
 
 		virtual size_t getSize() const;
 	
