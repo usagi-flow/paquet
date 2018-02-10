@@ -17,20 +17,26 @@ class CodeCave
 
 		virtual byte * getRawData();
 
-		virtual void * getAddress() const;
-		virtual void setAddress(void * address);
+		virtual void * getCaveAddress() const;
+		virtual void setCaveAddress(void * address);
 
-		virtual void * getSourceAddress() const;
-		virtual void setSourceAddress(void * address);
+		virtual void * getCallAddress() const;
+		virtual void setCallAddress(void * address);
 
-		virtual void * getDestinationAddress() const;
-		virtual void setDestinationAddress(void * address);
+		virtual void * getReturnAddress() const;
+		virtual void setReturnAddress(void * address);
 
 		virtual size_t getSize() const;
+
+		virtual size_t getSourceBytesToMove() const;
+		virtual void setSourceBytesToMove(size_t sourceBytesToMove);
 	
 	protected:
-		void * address;
+		void * caveAddress;
+		void * callAddress;
+		void * returnAddress;
 		size_t size;
+		size_t sourceBytesToMove;
 		std::shared_ptr<std::vector<byte>> data;
 };
 

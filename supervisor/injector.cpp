@@ -33,13 +33,11 @@ void Injector::performInjections()
 	this->analyzeProcess();
 	this->prepareCodeCaves();
 
-	//this->inject(this->cave_NtOpenFile);
-
 	// Write code cave with jump back to initialRIP + 5
-	this->inject(this->cave_RtlUserThreadStart);
+	//this->inject(this->cave_RtlUserThreadStart);
 
 	// Write jump to code cave
-	this->writeJumpNear(jumpInstruction, 0, this->initialRIP, this->cave_RtlUserThreadStart->getAddress());
+	//this->writeJumpNear(jumpInstruction, 0, this->initialRIP, this->cave_RtlUserThreadStart->getCaveAddress());
 	//this->process->writeMemory(jumpInstruction, sizeof(jumpInstruction), this->initialRIP);
 }
 
@@ -70,11 +68,11 @@ void Injector::prepareCodeCaves()
 	//this->cave_NtOpenFile = make_shared<CodeCave>(512);
 
 	size = 512;
-	i = 0;
+	i = 5;
 	address = this->process->allocateMemory(size);
 
 	this->cave_RtlUserThreadStart = make_shared<CodeCave>(size);
-	this->cave_RtlUserThreadStart->setAddress(address);
+	this->cave_RtlUserThreadStart->setCaveAddress(address);
 	this->writeJumpNear(this->cave_RtlUserThreadStart->getRawData(), i, address, (void*)((size_t)this->initialRIP + 5));
 }
 
@@ -123,9 +121,8 @@ void Injector::writeJumpNear(byte * buffer, size_t offset, void * source, void *
 
 void Injector::inject(shared_ptr<CodeCave> codeCave)
 {
-	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getAddress());
+	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getCaveAddress());
 
 	cout << "[parent] - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
-		dec << COUT_HEX_32 << codeCave->getAddress() << endl;
-
+		dec << COUT_HEX_32 << codeCave->getCaveAddress() << endl;
 }
