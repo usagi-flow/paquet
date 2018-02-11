@@ -4,30 +4,23 @@ using namespace std;
 
 CodeCave::CodeCave(size_t size)
 {
-	this->caveAddress = 0x0;
-	this->callAddress = 0x0;
-	this->returnAddress = 0x0;
-	this->size = size;
-	this->sourceBytesToMove = 0x0;
-	this->data = make_shared<vector<byte>>(size);
-
-	cout << "[parent] * Initialized CodeCave instance with " << dec << this->data->size() << " elements" << endl;
-}
-
-CodeCave::CodeCave(void * address, size_t size)
-{
-	this->caveAddress = 0x0;
-	this->callAddress = 0x0;
-	this->returnAddress = 0x0;
-	this->size = size;
-	this->sourceBytesToMove = 0x0;
-	this->data = make_shared<vector<byte>>(size);
-
-	cout << "[parent] * Initialized CodeCave instance with " << dec << this->data->size() << " elements" << endl;
+	this->initialize(size);
 }
 
 CodeCave::~CodeCave() noexcept(false)
 {
+}
+
+void CodeCave::initialize(size_t size)
+{
+	this->caveAddress = 0x0;
+	this->callAddress = 0x0;
+	this->returnAddress = 0x0;
+	this->size = size;
+	this->sourceBytesToMove = 0x0;
+	this->data = make_shared<vector<byte>>(size);
+
+	cout << "[parent] * Initialized CodeCave instance with " << dec << this->data->size() << " elements" << endl;
 }
 
 byte& CodeCave::operator[](int i)

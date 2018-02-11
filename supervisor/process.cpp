@@ -121,6 +121,14 @@ void Process::copyMemory(void * source, void * destination, size_t size)
 	delete[] buffer;
 }
 
+void Process::readMemory(void * source, void * buffer, size_t size) const
+{
+	bool success = ReadProcessMemory(this->processInfo.hProcess, source, buffer, size, 0x0);
+
+	if (!success)
+		throw new RuntimeException("Could not read child memory");
+}
+
 void Process::writeMemory(const void * buffer, size_t size, void * destination)
 {
 	bool success = WriteProcessMemory(this->processInfo.hProcess, destination, buffer, size, 0x0);

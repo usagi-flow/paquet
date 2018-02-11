@@ -56,9 +56,9 @@ int run(int argc, char* argv[])
 	//Process process = Process(".\\child.exe");
 	shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
 	Injector injector = Injector(process);
-	void * pCodeCave;
+	/*void * pCodeCave;
 	DWORD64 rip;
-	byte * pRIP = (byte*)&rip;
+	byte * pRIP = (byte*)&rip;*/
 
 	process->start(true);
 	this_thread::sleep_for(chrono::milliseconds(250));
@@ -90,6 +90,8 @@ int run(int argc, char* argv[])
 
 	process->resume();
 	this_thread::sleep_for(chrono::milliseconds(250));
+
+	cin.get();
 
 	return 0;
 }

@@ -21,13 +21,10 @@ class Process
 
 		virtual void start();
 		virtual void start(bool startSuspended);
-
 		virtual void resume();
-
 		virtual void * allocateMemory(size_t size);
-
 		virtual void copyMemory(void * source, void * destination, size_t size);
-
+		virtual void readMemory(void * source, void * buffer, size_t size) const;
 		virtual void writeMemory(const void * buffer, size_t size, void * destination);
 
 		/**

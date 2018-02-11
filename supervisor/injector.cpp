@@ -17,8 +17,6 @@ Injector::Injector(std::shared_ptr<Process> process)
 
 	cout << "[parent] * Initialized Injector instance @ 0x" << COUT_HEX_32 << this << endl;
 	cout << "[parent] * Process image name: " << this->process->getName() << endl;
-
-	CodeCave codeCave = CodeCave(0x0, 5); // TODO: temp
 }
 
 Injector::~Injector() noexcept(false)
@@ -33,8 +31,8 @@ void Injector::performInjections()
 	this->analyzeProcess();
 	this->prepareCodeCaves();
 
-	// Write code cave with jump back to initialRIP + 5
-	//this->inject(this->cave_RtlUserThreadStart);
+	// Inject the code cave
+	this->inject(this->cave_RtlUserThreadStart);
 
 	// Write jump to code cave
 	//this->writeJumpNear(jumpInstruction, 0, this->initialRIP, this->cave_RtlUserThreadStart->getCaveAddress());
@@ -61,19 +59,40 @@ void Injector::analyzeProcess()
 
 void Injector::prepareCodeCaves()
 {
+	shared_ptr<CodeCave> cave;
 	size_t size;
-	size_t i;
-	void * address;
+	size_t bytesToMove;
 
 	//this->cave_NtOpenFile = make_shared<CodeCave>(512);
 
 	size = 512;
-	i = 5;
-	address = this->process->allocateMemory(size);
+	bytesToMove = 7;
 
-	this->cave_RtlUserThreadStart = make_shared<CodeCave>(size);
-	this->cave_RtlUserThreadStart->setCaveAddress(address);
-	this->writeJumpNear(this->cave_RtlUserThreadStart->getRawData(), i, address, (void*)((size_t)this->initialRIP + 5));
+	// Target:
+	// 00000000770BB870 48 83 EC 48          sub         rsp,48h
+	// 00000000770BB874 4C 8B C9             mov         r9, rcx
+	cave = make_shared<CodeCave>(size);
+	this->writeNop(cave->getRawData(), 0, cave->getSize());
+	cave->setCaveAddress(this->process->allocateMemory(size));
+	cave->setCallAddress(this->initialRIP);
+	cave->setReturnAddress((void*)((size_t)this->initialRIP + bytesToMove));
+	cave->setSourceBytesToMove(bytesToMove);
+
+	this->writeSourceBytes(cave->getRawData(), 0, cave);
+	this->writeJumpNear(cave->getRawData(), bytesToMove,
+		(void*)((size_t)cave->getCaveAddress() + bytesToMove),
+		cave->getReturnAddress());
+
+	this->cave_RtlUserThreadStart = cave;
+}
+
+void Injector::writeNop(byte * buffer, size_t offset, size_t count)
+{
+	for (size_t i = 0; i < count; ++i)
+		buffer[offset + i] = 0x90;
+
+	cout << "[parent] - Wrote " << dec << count << " NOP bytes at offset 0x" <<
+		COUT_HEX_32 << offset << endl;
 }
 
 void Injector::writeJumpNear(byte * buffer, size_t offset, void * source, void * destination)
@@ -117,12 +136,43 @@ void Injector::writeJumpNear(byte * buffer, size_t offset, void * source, void *
 	buffer[offset + 2] = addressOffsetBytes[1];
 	buffer[offset + 3] = addressOffsetBytes[2];
 	buffer[offset + 4] = addressOffsetBytes[3];
+
+	cout << "[parent] - Wrote " << dec << instructionSize << " jump bytes at offset 0x" <<
+		COUT_HEX_32 << offset << endl;
+}
+
+void Injector::writeSourceBytes(byte * buffer, size_t offset, shared_ptr<CodeCave> codeCave)
+{
+	byte * localBuffer = new byte[codeCave->getSourceBytesToMove()];
+	this->process->readMemory(codeCave->getCallAddress(), localBuffer, codeCave->getSourceBytesToMove());
+
+	for (size_t i = 0; i < codeCave->getSourceBytesToMove(); ++i)
+	{
+		cout << "[parent] - Read 0x" << COUT_HEX_32 << (unsigned short)localBuffer[i] << endl;
+		buffer[offset + i] = localBuffer[i];
+	}
+
+	delete[] localBuffer;
+
+	cout << "[parent] - Wrote " << dec << codeCave->getSourceBytesToMove() << " source bytes at offset 0x" <<
+		COUT_HEX_32 << offset << endl;
 }
 
 void Injector::inject(shared_ptr<CodeCave> codeCave)
 {
+	byte * jumpToCave;
+
 	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getCaveAddress());
 
 	cout << "[parent] - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
-		dec << COUT_HEX_32 << codeCave->getCaveAddress() << endl;
+		COUT_HEX_32 << codeCave->getCaveAddress() << endl;
+
+	jumpToCave = new byte[codeCave->getSourceBytesToMove()];
+	writeNop(jumpToCave, 0, codeCave->getSourceBytesToMove());
+	writeJumpNear(jumpToCave, 0, this->initialRIP, codeCave->getCaveAddress());
+	this->process->writeMemory(jumpToCave, codeCave->getSourceBytesToMove(), this->initialRIP);
+	delete[] jumpToCave;
+
+	cout << "[parent] - Injected " << dec << codeCave->getSourceBytesToMove() << " bytes at 0x" <<
+		COUT_HEX_32 << this->initialRIP << endl;
 }

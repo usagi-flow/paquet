@@ -10,8 +10,9 @@ class CodeCave
 {
 	public:
 		CodeCave(size_t size);
-		CodeCave(void * address, size_t size);
 		virtual ~CodeCave() noexcept(false);
+
+		virtual void initialize(size_t size);
 
 		byte& operator[](int i);
 
