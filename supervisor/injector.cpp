@@ -95,31 +95,11 @@ size_t Injector::calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAd
 
 void Injector::prepareCodeCaves()
 {
-	shared_ptr<CodeCave> cave;
-	size_t size;
-	size_t bytesToMove;
-
-	// Target:
+	// Target (RtlUserThreadStart)
 	// 00000000770BB870 48 83 EC 48          sub         rsp,48h
 	// 00000000770BB874 4C 8B C9             mov         r9, rcx
 
-	size = 512;
-	bytesToMove = 7;
-
-	cave = make_shared<CodeCave>(size);
-
-	this->writeNop(cave->getRawData(), 0, cave->getSize());
-	cave->setCaveAddress(this->process->allocateMemory(size));
-	cave->setCallAddress(this->initialRIP);
-	cave->setReturnAddress((void*)((size_t)this->initialRIP + bytesToMove));
-	cave->setSourceBytesToMove(bytesToMove);
-
-	this->writeSourceBytes(cave->getRawData(), 0, cave);
-	this->writeJumpNear(cave->getRawData(), bytesToMove,
-		(void*)((size_t)cave->getCaveAddress() + bytesToMove),
-		cave->getReturnAddress());
-
-	this->cave_RtlUserThreadStart = cave;
+	this->cave_RtlUserThreadStart = this->createCodeCave(this->initialRIP, 512, 7);
 
 	// Target (NtOpenFile)
 	// 770DDF00 - 4C 8B D1              - mov r10,rcx
@@ -146,7 +126,8 @@ shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, s
 		(void*)((size_t)cave->getCaveAddress() + sourceBytesToMove),
 		cave->getReturnAddress());
 
-	cout << "[parent] - Prepared empty code cave at 0x" << COUT_HEX_32 << cave->getCaveAddress() << endl;
+	/*cout << "[parent] - Prepared empty code cave at 0x" << COUT_HEX_32 << cave->getCaveAddress() << endl;
+	cout << "           - Call at 0x" << COUT_HEX_32 << cave->getCallAddress() << endl;*/
 
 	return cave;
 }
@@ -224,17 +205,23 @@ void Injector::inject(shared_ptr<CodeCave> codeCave)
 {
 	byte * jumpToCave;
 
+	if (!codeCave.get())
+		return;
+
+	cout << "[parent] - Performing injections" << endl;
+
 	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getCaveAddress());
 
-	cout << "[parent] - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
+	cout << "[parent]   - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
 		COUT_HEX_32 << codeCave->getCaveAddress() << endl;
 
 	jumpToCave = new byte[codeCave->getSourceBytesToMove()];
 	writeNop(jumpToCave, 0, codeCave->getSourceBytesToMove());
-	writeJumpNear(jumpToCave, 0, this->initialRIP, codeCave->getCaveAddress());
-	this->process->writeMemory(jumpToCave, codeCave->getSourceBytesToMove(), this->initialRIP);
+	writeJumpNear(jumpToCave, 0, codeCave->getCallAddress(), codeCave->getCaveAddress());
+	this->process->writeMemory(jumpToCave, codeCave->getSourceBytesToMove(), codeCave->getCallAddress());
 	delete[] jumpToCave;
 
-	cout << "[parent] - Injected " << dec << codeCave->getSourceBytesToMove() << " bytes at 0x" <<
-		COUT_HEX_32 << this->initialRIP << endl;
+	cout << "[parent]   - Injected " << dec << codeCave->getSourceBytesToMove() << " bytes at 0x" <<
+		COUT_HEX_32 << codeCave->getCallAddress() << endl;
+	cout << "[parent] - Injections performed" << endl;
 }
