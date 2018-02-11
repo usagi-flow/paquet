@@ -109,14 +109,14 @@ void Process::copyMemory(void * source, void * destination, size_t size)
 	success = ReadProcessMemory(this->processInfo.hProcess, source, buffer, size, 0x0);
 
 	if (!success)
-		throw new RuntimeException("Could not read child memory");
+		throw RuntimeException("Could not read child memory");
 
 	Util::printHexDump("copyMemory() buffer", buffer, size);
 
 	success = WriteProcessMemory(this->processInfo.hProcess, destination, buffer, size, 0x0);
 
 	if (!success)
-		throw new RuntimeException("Could not write child memory");
+		throw RuntimeException("Could not write child memory");
 
 	delete[] buffer;
 }
@@ -126,7 +126,7 @@ void Process::readMemory(void * source, void * buffer, size_t size) const
 	bool success = ReadProcessMemory(this->processInfo.hProcess, source, buffer, size, 0x0);
 
 	if (!success)
-		throw new RuntimeException("Could not read child memory");
+		throw RuntimeException("Could not read child memory");
 }
 
 void Process::writeMemory(const void * buffer, size_t size, void * destination)
@@ -134,9 +134,9 @@ void Process::writeMemory(const void * buffer, size_t size, void * destination)
 	bool success = WriteProcessMemory(this->processInfo.hProcess, destination, buffer, size, 0x0);
 
 	if (!success)
-		throw new RuntimeException("Could not write child memory");
+		throw RuntimeException("Could not write child memory");
 
-	Util::printHexDump("writeMemory() buffer", buffer, size);
+	//Util::printHexDump("writeMemory() buffer", buffer, size);
 }
 
 shared_ptr<CONTEXT> Process::getMainThreadContext() const
