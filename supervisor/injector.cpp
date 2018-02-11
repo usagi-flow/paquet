@@ -33,10 +33,6 @@ void Injector::performInjections()
 	// Inject the code caves
 	this->inject(this->cave_RtlUserThreadStart);
 	this->inject(this->cave_NtOpenFile);
-
-	// Write jump to code cave
-	//this->writeJumpNear(jumpInstruction, 0, this->initialRIP, this->cave_RtlUserThreadStart->getCaveAddress());
-	//this->process->writeMemory(jumpInstruction, sizeof(jumpInstruction), this->initialRIP);
 }
 
 void Injector::analyzeProcess()
@@ -99,7 +95,7 @@ void Injector::prepareCodeCaves()
 	// 00000000770BB870 48 83 EC 48          sub         rsp,48h
 	// 00000000770BB874 4C 8B C9             mov         r9, rcx
 
-	this->cave_RtlUserThreadStart = this->createCodeCave(this->initialRIP, 512, 7);
+	this->cave_RtlUserThreadStart = this->createCodeCave(this->initialRIP, 64, 7);
 
 	// Target (NtOpenFile)
 	// 770DDF00 - 4C 8B D1              - mov r10,rcx
@@ -108,12 +104,13 @@ void Injector::prepareCodeCaves()
 	// 770DDF0A - C3                    - ret 
 	// 770DDF0B - 0F1F 44 00 00         - nop [rax+rax+00]
 
-	this->cave_NtOpenFile = this->createCodeCave((void*)((size_t)this->ntdllBase + this->offsetNtOpenFile), 512, 8);
+	this->cave_NtOpenFile = this->createCodeCave((void*)((size_t)this->ntdllBase + this->offsetNtOpenFile), 64, 8);
 }
 
 shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const
 {
 	shared_ptr<CodeCave> cave = make_shared<CodeCave>(size);
+	size_t offset;
 
 	this->writeNop(cave->getRawData(), 0, cave->getSize());
 	cave->setCaveAddress(this->process->allocateMemory(size));
@@ -121,9 +118,12 @@ shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, s
 	cave->setReturnAddress((void*)((size_t)callAddress + sourceBytesToMove));
 	cave->setSourceBytesToMove(sourceBytesToMove);
 
-	this->writeSourceBytes(cave->getRawData(), 0, cave);
-	this->writeJumpNear(cave->getRawData(), sourceBytesToMove,
-		(void*)((size_t)cave->getCaveAddress() + sourceBytesToMove),
+	// Write at the end of the cave, to allow space for the cave implementation
+	offset = size - (sourceBytesToMove + JUMP_NEAR_SIZE);
+
+	this->writeSourceBytes(cave->getRawData(), offset, cave);
+	this->writeJumpNear(cave->getRawData(), offset + sourceBytesToMove,
+		(void*)((size_t)cave->getCaveAddress() + offset + sourceBytesToMove),
 		cave->getReturnAddress());
 
 	/*cout << "[parent] - Prepared empty code cave at 0x" << COUT_HEX_32 << cave->getCaveAddress() << endl;
