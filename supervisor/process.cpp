@@ -151,7 +151,7 @@ void Process::setRIP(void * rip)
 
 	cout << "[parent] - Setting RIP to 0x" << COUT_HEX_32 << rip << endl;
 
-	this->threadContext->Rip = (unsigned long)rip;
+	this->threadContext->Rip = (size_t)rip;
 
 	if (SetThreadContext(this->processInfo.hThread, this->threadContext.get()))
 		cout << "[parent] - Updated the thread context" << endl;
