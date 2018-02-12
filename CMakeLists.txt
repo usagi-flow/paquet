@@ -5,7 +5,6 @@ project (wintest)
 # Clang: [-S] -mllvm --x86-asm-syntax=intel
 set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
 
-#add_library(Psapi main.cpp)
 add_executable(wintest main.cpp
 	supervisor/injector.cpp
 	supervisor/process.cpp
