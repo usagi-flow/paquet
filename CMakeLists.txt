@@ -3,7 +3,8 @@ project (wintest)
 
 # GNU: --masm=intel
 # Clang: [-S] -mllvm --x86-asm-syntax=intel
-set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+#set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS}")
 
 add_executable(wintest main.cpp
 	supervisor/injector.cpp
@@ -14,3 +15,5 @@ add_executable(wintest main.cpp
 target_link_libraries(wintest Psapi)
 
 add_executable(child child/child.cpp)
+
+add_library(library SHARED library/library.cpp)
