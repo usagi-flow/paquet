@@ -22,17 +22,25 @@ Injector::~Injector() noexcept(false)
 {
 }
 
-void Injector::performInjections()
+void Injector::prepare()
 {
-	void * address;
-	byte jumpInstruction[] = {0x0, 0x0, 0x0, 0x0, 0x0};
-
 	this->analyzeProcess();
 	this->prepareCodeCaves();
+}
 
-	// Inject the code caves
+void Injector::performInjections()
+{
+	if (!this->initialRIP)
+		throw RuntimeException("The injector is not prepared");
+
 	this->inject(this->cave_RtlUserThreadStart);
-	this->inject(this->cave_NtOpenFile);
+	this->inject(this->cave_NtCreateFile);
+}
+
+void Injector::injectDLL(const char * fileName)
+{
+	if (!this->initialRIP)
+		throw RuntimeException("The injector is not prepared");
 }
 
 void Injector::analyzeProcess()
@@ -52,6 +60,8 @@ void Injector::analyzeProcess()
 		((size_t)this->ntdllBase + this->offsetNtWriteFile) << endl;
 	cout << "[parent] - ntdll.dll!NtOpenFile:   0x" << COUT_HEX_32 <<
 		((size_t)this->ntdllBase + this->offsetNtOpenFile) << endl;
+	cout << "[parent] - ntdll.dll!NtCreateFile: 0x" << COUT_HEX_32 <<
+		((size_t)this->ntdllBase + this->offsetNtCreateFile) << endl;
 }
 
 void Injector::calculateSymbolOffsets()
@@ -77,6 +87,7 @@ void Injector::calculateSymbolOffsets()
 	this->offsetNtReadFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtReadFile");
 	this->offsetNtWriteFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtWriteFile");
 	this->offsetNtOpenFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtOpenFile");
+	this->offsetNtCreateFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtCreateFile");
 }
 
 size_t Injector::calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAddress, const char * name) const
@@ -104,7 +115,16 @@ void Injector::prepareCodeCaves()
 	// 770DDF0A - C3                    - ret 
 	// 770DDF0B - 0F1F 44 00 00         - nop [rax+rax+00]
 
-	this->cave_NtOpenFile = this->createCodeCave((void*)((size_t)this->ntdllBase + this->offsetNtOpenFile), 64, 8);
+	// Target (NtCreateFile)
+	// 000000007753E12 | 4C 8B D1		| mov r10, rcx	|
+	// 000000007753E12 | B8 52 00 00 00	| mov eax, 52	| 52:'R'
+	// 000000007753E12 | 0F 05			| syscall		|
+	// 000000007753E12 | C3				| ret			|
+
+	this->cave_NtCreateFile = this->createCodeCave((void*)((size_t)this->ntdllBase + this->offsetNtCreateFile), 64, 8);
+
+	// Absolute path: pointer to null-terminated (?) unicode string at RSP+A0
+	// Unicode string: 2 bytes per character, null == {0x0, 0x0}
 }
 
 shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const

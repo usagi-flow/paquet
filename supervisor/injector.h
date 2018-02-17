@@ -11,7 +11,9 @@ class Injector
 		Injector(std::shared_ptr<Process> process);
 		virtual ~Injector() noexcept(false);
 
+		virtual void prepare();
 		virtual void performInjections();
+		virtual void injectDLL(const char * fileName);
 	
 	protected:
 		std::shared_ptr<Process> process;
@@ -21,10 +23,12 @@ class Injector
 		size_t offsetNtReadFile;
 		size_t offsetNtWriteFile;
 		size_t offsetNtOpenFile;
+		size_t offsetNtCreateFile;
 		//std::shared_ptr<std::vector<CodeCave>> codeCaves;
 
 		std::shared_ptr<CodeCave> cave_RtlUserThreadStart;
 		std::shared_ptr<CodeCave> cave_NtOpenFile;
+		std::shared_ptr<CodeCave> cave_NtCreateFile;
 
 		virtual void analyzeProcess();
 		virtual void calculateSymbolOffsets();

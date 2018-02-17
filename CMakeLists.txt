@@ -16,4 +16,4 @@ target_link_libraries(wintest Psapi)
 
 add_executable(child child/child.cpp)
 
-add_library(library SHARED library/library.cpp)
+add_library(paquet SHARED library/library.cpp)
