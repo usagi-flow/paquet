@@ -53,10 +53,8 @@ int run(int argc, char* argv[])
 
 	injector.prepare();
 	injector.performInjections();
-	//injector.injectDLL("psapi.dll");
 	injector.injectDLL("paquet.dll");
 
-	cin.get();
 	this_thread::sleep_for(chrono::milliseconds(250));
 
 	process->resume();

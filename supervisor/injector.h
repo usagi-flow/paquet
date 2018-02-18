@@ -18,29 +18,41 @@ class Injector
 		virtual void performInjections();
 		virtual void injectDLL(const std::string & fileName);
 		virtual void injectDLLStealthed(const std::string & fileName);
-		virtual void executeLocalFunctionRemotely(void * function, void * context);
+		virtual void * injectString(const std::string & value);
+
+		/**
+		Executes the local function referred by <code>function</code> remotely in a separate thread.
+		A local context referred by <code>context</code> and with a size of <code>contextSize</code>
+		is copied in the remote process before execution, and is then copied back into the local
+		memory after the remote thread completes.
+		*/
+		virtual void * executeLocalFunctionRemotely(void * function, void * context, size_t contextSize);
 	
 	protected:
 		static HMODULE hCodeLibModule;
 
 		std::shared_ptr<Process> process;
 		void * initialRIP;
+
 		void * ntdllBase;
 		void * kernel32Base;
+
 		size_t offsetRtlUserThreadStart;
 		size_t offsetNtReadFile;
 		size_t offsetNtWriteFile;
 		size_t offsetNtOpenFile;
 		size_t offsetNtCreateFile;
+		size_t offsetGetCurrentProcess;
 		size_t offsetGetModuleHandleExA;
 		size_t offsetGetProcAddress;
 		size_t offsetLoadLibraryA;
 		size_t offsetK32GetModuleInformation;
-		//std::shared_ptr<std::vector<CodeCave>> codeCaves;
+
 		byte * dllBuffer;
 		size_t dllSize;
 
 		void (*pInspectDLL)(InspectDLLContext * context);
+		void (*pLoadFunctionAddress)(LoadFunctionAddressContext * context);
 
 		std::shared_ptr<CodeCave> cave_RtlUserThreadStart;
 		std::shared_ptr<CodeCave> cave_NtOpenFile;
@@ -50,7 +62,8 @@ class Injector
 		virtual void analyzeProcess();
 		virtual void calculateSymbolOffsets();
 		virtual size_t calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAddress, const char * name) const;
-		virtual void loadOwnSymbols();
+		virtual void loadLocalSymbols();
+		virtual void * loadLocalSymbol(const std::string & name);
 		virtual void prepareCodeCaves();
 		virtual std::shared_ptr<CodeCave> createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const;
 		virtual void writeNop(byte * buffer, size_t offset, size_t count) const;

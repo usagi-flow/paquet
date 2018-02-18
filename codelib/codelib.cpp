@@ -39,18 +39,21 @@ void testDLL()
 	printf("[codelib] Test successful\n");
 }
 
-void injectDLL(InjectDLLContext * context)
-{
-}
-
 void inspectDLL(InspectDLLContext * context)
 {
+	HANDLE hProcess = 0x0;
 	HMODULE hModule = 0x0;
+	MODULEINFO moduleInfo;
+
+	memset(&moduleInfo, 0x0, sizeof(MODULEINFO));
 
 	context->pGetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 		(LPCTSTR)context->dllName, &hModule);
+	hProcess = context->pGetCurrentProcess();
+	context->pGetModuleInformation(hProcess, hModule, &moduleInfo, sizeof(moduleInfo));
 
 	context->hModule = hModule;
+	context->moduleBaseAddress = moduleInfo.lpBaseOfDll;
 }
 
 void inspectStealthDLL(InspectStealthDLLContext * context)
@@ -62,4 +65,9 @@ void inspectStealthDLL(InspectStealthDLLContext * context)
 		(LPCTSTR)context->moduleBaseAddress, &hModule);
 
 	context->hModule = hModule;
+}
+
+void loadFunctionAddress(LoadFunctionAddressContext * context)
+{
+	context->functionAddress = context->pGetProcAddress(context->hModule, context->functionName);
 }

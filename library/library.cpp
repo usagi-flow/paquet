@@ -64,32 +64,3 @@ void onNtCreateFile()
 {
 	printf("[library] File creation intercepted!\n");
 }
-
-void test()
-{
-	printf("[library] Test succeeded\n");
-}
-
-HMODULE dummyResult;
-
-void test2()
-{
-	char buffer[5];
-	buffer[0] = 0xEF;
-	buffer[1] = 0xEF;
-	buffer[2] = 0xEF;
-	buffer[3] = 0xEF;
-	buffer[4] = 0xEF;
-	printf("[library] Test2 succeeded: %d, %d\n", buffer[0], buffer[4]);
-	dummyResult = LoadLibrary("paquet.dll");
-
-	if (!dummyResult)
-		dummyResult = GetModuleHandle("paquet.dll");
-
-	HMODULE hModule = 0x0;
-	bool success;
-
-	success = GetModuleHandleEx(
-		GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		(LPCSTR)&DllMain, &hModule);
-}

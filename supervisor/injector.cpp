@@ -19,6 +19,7 @@ Injector::Injector(std::shared_ptr<Process> process)
 	this->offsetNtWriteFile = 0x0;
 	this->offsetRtlUserThreadStart = 0x0;
 	this->offsetNtCreateFile = 0x0;
+	this->offsetGetCurrentProcess = 0x0;
 	this->offsetGetModuleHandleExA = 0x0;
 	this->offsetGetProcAddress = 0x0;
 	this->offsetLoadLibraryA = 0x0;
@@ -53,21 +54,18 @@ void Injector::performInjections()
 
 void Injector::injectDLL(const string & fileName)
 {
-	size_t fileNameSize;
 	void * fileNameAddress;
-	byte zeroBytes[] = { 0x0, 0x0 };
 	void * loadLibraryAddress;
 
 	cout << "[parent] - Injecting DLL: " << fileName << endl;
 
-	// Inject the file name and ensure it is null-terminated
-	fileNameSize = fileName.length();
-	fileNameAddress = this->process->allocateMemory(fileNameSize + sizeof(zeroBytes));
-	this->process->writeMemory(fileName.c_str(), fileNameSize, fileNameAddress);
-	this->process->writeMemory(zeroBytes, sizeof(zeroBytes), (void*)((size_t)fileNameAddress + fileNameSize));
-
+	// Calculate the remote LoadLibaryA() address
 	loadLibraryAddress = (void*)((size_t)this->kernel32Base + this->offsetLoadLibraryA);
 
+	// Inject the file name and ensure it is null-terminated
+	fileNameAddress = this->injectString(fileName);
+
+	// Invoke the LoadLibaryA() function remotely
 	this->process->spawnThread(loadLibraryAddress, fileNameAddress);
 
 	cout << "[parent] - Injected DLL" << endl;
@@ -194,7 +192,7 @@ void Injector::injectDLLStealthed(const string & fileName)
 	if (!this->initialRIP)
 		throw RuntimeException("The injector is not prepared");
 
-	cout << "[parent] - Injecting DLL: " << fileName << endl;
+	cout << "[parent] - Injecting stealth DLL: " << fileName << endl;
 
 	dll = ifstream(fileName, ifstream::ate | ifstream::binary);
 
@@ -238,11 +236,36 @@ void Injector::injectDLLStealthed(const string & fileName)
 	this->inspectInjectedDLL(address);
 }
 
-void Injector::executeLocalFunctionRemotely(void * function, void * context)
+void * Injector::injectString(const string & value)
 {
+	void * address = this->process->allocateMemory(value.length() + 2);
+	byte zeroBytes[2] = { 0x0, 0x0 };
+
+	this->process->writeMemory(value.c_str(), value.length(), address);
+	this->process->writeMemory(zeroBytes, sizeof(zeroBytes), (void*)((size_t)address + value.length()));
+
+	return address;
+}
+
+void * Injector::executeLocalFunctionRemotely(void * function, void * context, size_t contextSize)
+{
+	cout << "[parent] - Invoking function in remote process" << endl;
+
 	void * functionAddress = this->injectLocalFunction(function);
-	cin.get();
-	this->process->spawnThread(functionAddress, context);
+	void * contextAddress = this->process->allocateMemory(contextSize);
+
+	cout << "[parent]   - Remote function:  0x" << COUT_HEX_32 << functionAddress << endl;
+	cout << "[parent]   - Remote context:   0x" << COUT_HEX_32 << contextAddress << endl;
+
+	this->process->writeMemory(context, contextSize, contextAddress);
+
+	this->process->spawnThread(functionAddress, contextAddress);
+
+	this->process->readMemory(contextAddress, context, contextSize);
+
+	cout << "[parent] - Function invoked" << endl;
+
+	return contextAddress;
 }
 
 void Injector::loadCodeLib()
@@ -269,7 +292,7 @@ void Injector::loadCodeLib()
 		cout << "[parent] - codelib.dll is already present" << endl;
 	}
 
-	this->loadOwnSymbols();
+	this->loadLocalSymbols();
 
 	cout << "[parent] - CodeLib module handle: 0x" << COUT_HEX_32 << hCodeLibModule << endl;
 }
@@ -297,6 +320,8 @@ void Injector::analyzeProcess()
 
 	cout << "[parent] - kernel32.dll!LoadLibraryA: 0x" << COUT_HEX_32 <<
 		((size_t)this->kernel32Base + this->offsetLoadLibraryA) << endl;
+	cout << "[parent] - kernel32.dll!GetCurrentProcess: 0x" << COUT_HEX_32 <<
+		((size_t)this->kernel32Base + this->offsetGetCurrentProcess) << endl;
 	cout << "[parent] - kernel32.dll!GetModuleHandleExA: 0x" << COUT_HEX_32 <<
 		((size_t)this->kernel32Base + this->offsetGetModuleHandleExA) << endl;
 	cout << "[parent] - kernel32.dll!GetProcAddress: 0x" << COUT_HEX_32 <<
@@ -345,6 +370,7 @@ void Injector::calculateSymbolOffsets()
 	this->kernel32Base = kernel32ModuleInfo.lpBaseOfDll;
 
 	this->offsetLoadLibraryA = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "LoadLibraryA");
+	this->offsetGetCurrentProcess = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "GetCurrentProcess");
 	this->offsetGetModuleHandleExA = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "GetModuleHandleExA");
 	this->offsetGetProcAddress = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "GetProcAddress");
 	this->offsetK32GetModuleInformation = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "K32GetModuleInformation");
@@ -360,31 +386,44 @@ size_t Injector::calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAd
 	return (size_t)address - (size_t)moduleBaseAddress;
 }
 
-void Injector::loadOwnSymbols()
+void Injector::loadLocalSymbols()
 {
-	string name = "inspectDLL";
+	this->pInspectDLL = (void(*)(InspectDLLContext*))this->loadLocalSymbol("inspectDLL");
+	this->pLoadFunctionAddress = (void(*)(LoadFunctionAddressContext*))this->loadLocalSymbol("loadFunctionAddress");
+}
+
+void * Injector::loadLocalSymbol(const string & name)
+{
+	void * address;
 	byte * pByte;
 	int offset;
 
 	cout << "[parent] - Loading local function \"" << name << "\"" << endl;
 
-	this->pInspectDLL = (void(*)(InspectDLLContext*))GetProcAddress(Injector::hCodeLibModule, name.c_str());
-	if (!pInspectDLL)
-		throw RuntimeException("Could not load own symbol \"inspectDLL\"");
+	// Retrieve the entry point address
 
-	cout << "[parent]   - Found function at 0x" << COUT_HEX_32 << this->pInspectDLL << endl;
+	address = (void*)GetProcAddress(Injector::hCodeLibModule, name.c_str());
+	if (!address)
+		throw RuntimeException("Could not load local symbol");
 
-	pByte = (byte*)this->pInspectDLL;
+	cout << "[parent]   - Found function at 0x" << COUT_HEX_32 << address << endl;
+
+	// Verify if the address points to the function body or to a jump to the body;
+	// calculate the address of the effective function body if necessary
+
+	pByte = (byte*)address;
 	if (pByte[0] == Assembler::JumpNear)
 	{
 		cout << "[parent]   - Found near jump at 0x" << COUT_HEX_32 << (size_t)pByte << endl;
 		offset = *(int*)(pByte + 1);
 		offset += 5; // Jump near instruction size
-		this->pInspectDLL = (void(*)(InspectDLLContext*))(((size_t)this->pInspectDLL) + offset);
+		address = (void*)(((size_t)address) + offset);
 		cout << "[parent]   - Relocating local function according to offset 0x" << COUT_HEX_32 << offset << endl;
 	}
 
-	cout << "[parent] - Local function at 0x" << COUT_HEX_32 << this->pInspectDLL << endl;
+	cout << "[parent] - Local function at 0x" << COUT_HEX_32 << address << endl;
+
+	return address;
 }
 
 void Injector::prepareCodeCaves()
@@ -535,28 +574,34 @@ void Injector::inject(shared_ptr<CodeCave> codeCave)
 
 void Injector::inspectInjectedDLL(const string & fileName, const void * fileNameAddress)
 {
-	InspectDLLContext context;
-	void * contextAddress;
-	//void * remoteFunctionAddress;
+	InspectDLLContext inspectContext;
+	LoadFunctionAddressContext loadFunctionAddressContext;
 
-	memset(&context, 0x0, sizeof(context));
-	context.dllName = (const char *)fileNameAddress;
-	context.pGetModuleHandleEx = (bool(*)(DWORD, LPCSTR, HMODULE*))
+	memset(&inspectContext, 0x0, sizeof(inspectContext));
+	memset(&loadFunctionAddressContext, 0x0, sizeof(loadFunctionAddressContext));
+
+	inspectContext.dllName = (const char *)fileNameAddress;
+	inspectContext.pGetCurrentProcess = (HANDLE(*)())
+		((size_t)this->kernel32Base + this->offsetGetCurrentProcess);
+	inspectContext.pGetModuleHandleEx = (bool(*)(DWORD, LPCSTR, HMODULE*))
 		((size_t)this->kernel32Base + this->offsetGetModuleHandleExA);
-	context.pGetModuleInformation = (bool(*)(HMODULE, LPCSTR))
+	inspectContext.pGetModuleInformation = (bool(*)(HANDLE, HMODULE, LPMODULEINFO, DWORD))
 		((size_t)this->kernel32Base + this->offsetK32GetModuleInformation);
 
-	contextAddress = this->process->allocateMemory(sizeof(context));
-	this->process->writeMemory(&context, sizeof(context), contextAddress);
-	cout << "[parent] - Context written at 0x" << COUT_HEX_32 << contextAddress << endl;
+	this->executeLocalFunctionRemotely(this->pInspectDLL,
+		&inspectContext, sizeof(inspectContext));
 
-	cout << "[parent] - Executing remote function..." << endl;
-	this->executeLocalFunctionRemotely(this->pInspectDLL, contextAddress);
-	/*remoteFunctionAddress = this->injectLocalFunction(this->pInspectDLL);
+	cout << "[parent] - Module base address: 0x" << COUT_HEX_32 << inspectContext.moduleBaseAddress << endl;
 
-	cout << "[parent]   - Spawning thread at 0x" << COUT_HEX_32 << remoteFunctionAddress << endl;
-	cin.get();
-	this->process->spawnThread(remoteFunctionAddress, contextAddress);*/
+	loadFunctionAddressContext.hModule = inspectContext.hModule;
+	loadFunctionAddressContext.functionName = (const char *)this->injectString("onNtCreateFile");
+	loadFunctionAddressContext.pGetProcAddress = (FARPROC(*)(HMODULE, LPCSTR))
+		((size_t)this->kernel32Base + this->offsetGetProcAddress);
+
+	this->executeLocalFunctionRemotely(this->pLoadFunctionAddress,
+		&loadFunctionAddressContext, sizeof(loadFunctionAddressContext));
+
+	cout << "[parent] - onNtCreateFile() address: 0x" << COUT_HEX_32 << loadFunctionAddressContext.functionAddress << endl;
 }
 
 void Injector::inspectInjectedDLL(void * address)

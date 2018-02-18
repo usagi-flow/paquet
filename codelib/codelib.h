@@ -16,22 +16,15 @@ void onDLLDetached();
 
 API void testDLL();
 
-struct InjectDLLContext
-{
-	HMODULE (*pLoadLibraryA)(LPCSTR lpFileName);
-	const char dllName[64];
-};
-
-API void injectDLL(InjectDLLContext * context);
-
 struct InspectDLLContext
 {
 	// In, mandatory
 
 	const char * dllName;
 
+	HANDLE(*pGetCurrentProcess)();
 	bool(*pGetModuleHandleEx)(DWORD dwFlags, LPCSTR lpModuleName, HMODULE * phModule);
-	bool(*pGetModuleInformation)(HMODULE hModule, LPCSTR lpProcName);
+	bool(*pGetModuleInformation)(HANDLE hProcess, HMODULE hModule, LPMODULEINFO lpmodinfo, DWORD cb);
 
 	// Out
 
@@ -51,5 +44,21 @@ struct InspectStealthDLLContext
 };
 
 API void inspectStealthDLL(InspectStealthDLLContext * context);
+
+struct LoadFunctionAddressContext
+{
+	// In, mandatory
+
+	HMODULE hModule;
+	const char * functionName;
+
+	FARPROC(*pGetProcAddress)(HMODULE hModule, LPCSTR lpProcName);
+
+	// Out
+
+	void * functionAddress;
+};
+
+API void loadFunctionAddress(LoadFunctionAddressContext * context);
 
 #endif
