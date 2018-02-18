@@ -3,16 +3,29 @@
 // Defined offsets
 #define JUMP_NEAR_SIZE	0x5
 
+#define INJECT_DLL_STEALTHED
+
 using namespace std;
+
+HMODULE Injector::hCodeLibModule = 0x0;
 
 Injector::Injector(std::shared_ptr<Process> process)
 {
 	this->process = process;
 	this->initialRIP = 0x0;
-	this->ntdllBase;
+	this->ntdllBase = 0x0;
+	this->kernel32Base = 0x0;
 	this->offsetNtOpenFile = 0x0;
 	this->offsetNtWriteFile = 0x0;
 	this->offsetRtlUserThreadStart = 0x0;
+	this->offsetNtCreateFile = 0x0;
+	this->offsetGetModuleHandleExA = 0x0;
+	this->offsetGetProcAddress = 0x0;
+	this->offsetLoadLibraryA = 0x0;
+	this->offsetK32GetModuleInformation = 0x0;
+	this->dllBuffer = 0x0;
+	this->dllSize = 0x0;
+	this->pInspectDLL = 0x0;
 
 	cout << "[parent] * Initialized Injector instance @ 0x" << COUT_HEX_32 << this << endl;
 	cout << "[parent] * Process image name: " << this->process->getName() << endl;
@@ -24,6 +37,7 @@ Injector::~Injector() noexcept(false)
 
 void Injector::prepare()
 {
+	this->loadCodeLib();
 	this->analyzeProcess();
 	this->prepareCodeCaves();
 }
@@ -37,10 +51,227 @@ void Injector::performInjections()
 	this->inject(this->cave_NtCreateFile);
 }
 
-void Injector::injectDLL(const char * fileName)
+void Injector::injectDLL(const string & fileName)
 {
+	size_t fileNameSize;
+	void * fileNameAddress;
+	byte zeroBytes[] = { 0x0, 0x0 };
+	void * loadLibraryAddress;
+
+	cout << "[parent] - Injecting DLL: " << fileName << endl;
+
+	// Inject the file name and ensure it is null-terminated
+	fileNameSize = fileName.length();
+	fileNameAddress = this->process->allocateMemory(fileNameSize + sizeof(zeroBytes));
+	this->process->writeMemory(fileName.c_str(), fileNameSize, fileNameAddress);
+	this->process->writeMemory(zeroBytes, sizeof(zeroBytes), (void*)((size_t)fileNameAddress + fileNameSize));
+
+	loadLibraryAddress = (void*)((size_t)this->kernel32Base + this->offsetLoadLibraryA);
+
+	this->process->spawnThread(loadLibraryAddress, fileNameAddress);
+
+	cout << "[parent] - Injected DLL" << endl;
+
+	this->inspectInjectedDLL(fileName, fileNameAddress);
+}
+
+void _injectDLL(const string & fileName)
+{
+	/*
+#ifdef INJECT_DLL_STEALTHED
+	this->injectDLLStealthed(fileName);
+	return;
+#endif
+
+	byte loadLibraryCaller[64];
+	size_t i = 0;
+
+	void * loadLibraryCallerAddress;
+	void * loadLibraryResultAddress;
+	void * loadLibraryAddress;
+	size_t fileNameSize;
+	void * fileNameAddress;
+	byte zeroBytes[] = {0x0, 0x0};
+	HANDLE hThread;
+
 	if (!this->initialRIP)
 		throw RuntimeException("The injector is not prepared");
+
+	cout << "[parent] - Injecting DLL: " << fileName << endl;
+
+	loadLibraryAddress = (void*)((size_t)this->kernel32Base + this->offsetLoadLibraryA);
+
+	// Inject the file name and ensure it is null-terminated
+	fileNameSize = fileName.length();
+	fileNameAddress = this->process->allocateMemory(fileNameSize + sizeof(zeroBytes));
+	this->process->writeMemory(fileName.c_str(), fileNameSize, fileNameAddress);
+	this->process->writeMemory(zeroBytes, sizeof(zeroBytes), (void*)((size_t)fileNameAddress + fileNameSize));
+
+	// Inject code to load the library
+	loadLibraryCallerAddress = this->process->allocateMemory(sizeof(loadLibraryCaller));
+	loadLibraryResultAddress = this->process->allocateMemory(64);
+	memset(loadLibraryCaller, 0x0, sizeof(loadLibraryCaller));
+
+	Assembler::writePush(loadLibraryCaller, i++, Assembler::RAX);
+	Assembler::writePush(loadLibraryCaller, i++, Assembler::RBX);
+	Assembler::writePush(loadLibraryCaller, i++, Assembler::RCX);
+	Assembler::writePush(loadLibraryCaller, i++, Assembler::RDX);
+
+	loadLibraryCaller[i++] = 0x48;	// MOV
+	loadLibraryCaller[i++] = 0xB8;	// RAX,
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[0]; // kernel32.LoadLibraryA
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[1];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[2];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[3];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[4];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[5];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[6];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryAddress)[7];
+
+	loadLibraryCaller[i++] = 0x48;	// MOV
+	loadLibraryCaller[i++] = 0xB9;	// RCX,
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[0]; // File name buffer
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[1];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[2];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[3];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[4];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[5];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[6];
+	loadLibraryCaller[i++] = ((byte*)&fileNameAddress)[7];
+
+	loadLibraryCaller[i++] = 0xFF;	// CALL
+	loadLibraryCaller[i++] = 0xD0;	// RAX
+
+	loadLibraryCaller[i++] = 0x48;	// MOV
+	loadLibraryCaller[i++] = 0xA3;	// [...], RAX
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[0]; // Result buffer
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[1];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[2];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[3];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[4];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[5];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[6];
+	loadLibraryCaller[i++] = ((byte*)&loadLibraryResultAddress)[7];
+
+	Assembler::writePop(loadLibraryCaller, i++, Assembler::RDX);
+	Assembler::writePop(loadLibraryCaller, i++, Assembler::RCX);
+	Assembler::writePop(loadLibraryCaller, i++, Assembler::RBX);
+	Assembler::writePop(loadLibraryCaller, i++, Assembler::RAX);
+
+	loadLibraryCaller[i++] = 0xC3;	// RET
+
+	cout << "[parent]   - LoadLibraryA caller address: 0x" << COUT_HEX_32 << loadLibraryCallerAddress << endl;
+	cout << "[parent]   - Result buffer address: 0x" << COUT_HEX_32 << loadLibraryResultAddress << endl;
+
+	this->process->writeMemory(loadLibraryCaller, sizeof(loadLibraryCaller), loadLibraryCallerAddress);
+
+	//cout << "[parent] - About to spawn the remote thread..." << endl;
+	//cin.get();
+
+	// Spawn a thread to load the library
+	cout << "[parent]   - Spawning thread" << endl;
+	hThread = this->process->spawnThread(loadLibraryCallerAddress, fileNameAddress);
+	//hThread = this->process->spawnThread(loadLibraryAddress, fileNameAddress);
+
+	cout << "[parent] - Injected DLL" << endl;
+
+	//this->process->getModules();*/
+}
+
+void Injector::injectDLLStealthed(const string & fileName)
+{
+	//const unsigned long maxReads = 1073741824L; // Max size = 1Gb * sizeof(readBuffer) = 4096Gb
+	const unsigned long maxReads = 1048576L; // Max size = 1Mb * sizeof(readBuffer) = 4Gb
+
+	unsigned long i = 0;
+	byte readBuffer[4096];
+	size_t size;
+	size_t allocationSize;
+	ifstream dll;
+	void * address;
+	void * targetAddress;
+
+	if (!this->initialRIP)
+		throw RuntimeException("The injector is not prepared");
+
+	cout << "[parent] - Injecting DLL: " << fileName << endl;
+
+	dll = ifstream(fileName, ifstream::ate | ifstream::binary);
+
+	if (!dll.is_open())
+		throw RuntimeException("Failed to open the DLL");
+
+	size = dll.tellg();
+
+	if (size > 0)
+	{
+		allocationSize = size + (sizeof(readBuffer) - (size % sizeof(readBuffer)));
+		cout << "[parent]   - Buffer size: " << dec << sizeof(readBuffer) << endl;
+		cout << "[parent]   - File size: " << dec << size << endl;
+		cout << "[parent]   - Allocation size: " << dec << allocationSize << endl;
+
+		address = this->process->allocateMemory(size);
+
+		while (dll.read((char*)readBuffer, sizeof(readBuffer)))
+		{
+			targetAddress = (void*)((size_t)address + i * sizeof(readBuffer));
+			this->process->writeMemory(readBuffer, sizeof(readBuffer), targetAddress);
+
+			++i;
+
+			if (i > maxReads)
+			{
+				cerr << "[parent]   - Maximum read count exceeded" << endl;
+				break;
+			}
+		}
+	}
+	else
+	{
+		throw RuntimeException("No valid DLL file");
+	}
+
+	dll.close();
+
+	cout << "[parent] - Injected DLL at 0x" << COUT_HEX_32 << address << endl;
+
+	this->inspectInjectedDLL(address);
+}
+
+void Injector::executeLocalFunctionRemotely(void * function, void * context)
+{
+	void * functionAddress = this->injectLocalFunction(function);
+	cin.get();
+	this->process->spawnThread(functionAddress, context);
+}
+
+void Injector::loadCodeLib()
+{
+	HMODULE hModule = 0x0;
+	void (*pTestDLL)() = 0x0;
+
+	if (!Injector::hCodeLibModule)
+	{
+		cout << "[parent] - Loading codelib.dll" << endl;
+		hModule = LoadLibrary("codelib.dll");
+		Injector::hCodeLibModule = hModule;
+
+		cout << "[parent] - CodeLib loaded, performing test" << endl;
+
+		pTestDLL = (void(*)())GetProcAddress(hModule, "testDLL");
+		if (pTestDLL != 0x0)
+			pTestDLL();
+		else
+			throw RuntimeException("CodeLib test failed");
+	}
+	else
+	{
+		cout << "[parent] - codelib.dll is already present" << endl;
+	}
+
+	this->loadOwnSymbols();
+
+	cout << "[parent] - CodeLib module handle: 0x" << COUT_HEX_32 << hCodeLibModule << endl;
 }
 
 void Injector::analyzeProcess()
@@ -50,6 +281,7 @@ void Injector::analyzeProcess()
 	this->initialRIP = (void*)this->process->getMainThreadContext()->Rip;
 	this->calculateSymbolOffsets();
 	this->ntdllBase = (void*)((size_t)this->initialRIP - this->offsetRtlUserThreadStart);
+	//this->kernel32Base = 0x0;
 
 	cout << "[parent] - Initial RIP:            0x" << COUT_HEX_32 << this->initialRIP << endl;
 	cout << "[parent] - Calculated ntdll base:  0x" << COUT_HEX_32 << this->ntdllBase << endl;
@@ -62,32 +294,60 @@ void Injector::analyzeProcess()
 		((size_t)this->ntdllBase + this->offsetNtOpenFile) << endl;
 	cout << "[parent] - ntdll.dll!NtCreateFile: 0x" << COUT_HEX_32 <<
 		((size_t)this->ntdllBase + this->offsetNtCreateFile) << endl;
+
+	cout << "[parent] - kernel32.dll!LoadLibraryA: 0x" << COUT_HEX_32 <<
+		((size_t)this->kernel32Base + this->offsetLoadLibraryA) << endl;
+	cout << "[parent] - kernel32.dll!GetModuleHandleExA: 0x" << COUT_HEX_32 <<
+		((size_t)this->kernel32Base + this->offsetGetModuleHandleExA) << endl;
+	cout << "[parent] - kernel32.dll!GetProcAddress: 0x" << COUT_HEX_32 <<
+		((size_t)this->kernel32Base + this->offsetGetProcAddress) << endl;
+	cout << "[parent] - kernel32.dll!K32GetModuleInformation: 0x" << COUT_HEX_32 <<
+		((size_t)this->kernel32Base + this->offsetK32GetModuleInformation) << endl;
 }
 
 void Injector::calculateSymbolOffsets()
 {
-	HMODULE moduleHandle = GetModuleHandle("ntdll.dll");
+	HMODULE ntdllModuleHandle = GetModuleHandle("ntdll.dll");
+	HMODULE kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
 
-	MODULEINFO moduleInfo;
-	//FARPROC openFileAddress = GetProcAddress(moduleHandle, "NtOpenFile");
-	//FARPROC threadStartAddress = GetProcAddress(moduleHandle, "RtlUserThreadStart");
+	MODULEINFO ntdllModuleInfo;
+	MODULEINFO kernel32ModuleInfo;
 
-	if (!moduleHandle)
+	if (!ntdllModuleHandle)
 	{
 		cerr << "[parent] - Could not retrieve own ntdll.dll module" << endl;
 		return;
 	}
 
-	memset(&moduleInfo, 0x0, sizeof(moduleInfo));
+	if (!kernel32ModuleHandle)
+	{
+		cerr << "[parent] - Could not retrieve own kernel32.dll module" << endl;
+		return;
+	}
 
-	if (!GetModuleInformation(GetCurrentProcess(), moduleHandle, &moduleInfo, sizeof(moduleInfo)))
+	memset(&ntdllModuleInfo, 0x0, sizeof(ntdllModuleInfo));
+
+	if (!GetModuleInformation(GetCurrentProcess(), ntdllModuleHandle, &ntdllModuleInfo, sizeof(ntdllModuleInfo)))
 		throw RuntimeException("Could not retrieve the own ntdll.dll module information");
 
-	this->offsetRtlUserThreadStart = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "RtlUserThreadStart");
-	this->offsetNtReadFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtReadFile");
-	this->offsetNtWriteFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtWriteFile");
-	this->offsetNtOpenFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtOpenFile");
-	this->offsetNtCreateFile = this->calculateSymbolOffset(moduleHandle, moduleInfo.lpBaseOfDll, "NtCreateFile");
+	this->offsetRtlUserThreadStart = this->calculateSymbolOffset(ntdllModuleHandle, ntdllModuleInfo.lpBaseOfDll, "RtlUserThreadStart");
+	this->offsetNtReadFile = this->calculateSymbolOffset(ntdllModuleHandle, ntdllModuleInfo.lpBaseOfDll, "NtReadFile");
+	this->offsetNtWriteFile = this->calculateSymbolOffset(ntdllModuleHandle, ntdllModuleInfo.lpBaseOfDll, "NtWriteFile");
+	this->offsetNtOpenFile = this->calculateSymbolOffset(ntdllModuleHandle, ntdllModuleInfo.lpBaseOfDll, "NtOpenFile");
+	this->offsetNtCreateFile = this->calculateSymbolOffset(ntdllModuleHandle, ntdllModuleInfo.lpBaseOfDll, "NtCreateFile");
+
+	memset(&kernel32ModuleInfo, 0x0, sizeof(kernel32ModuleInfo));
+
+	if (!GetModuleInformation(GetCurrentProcess(), kernel32ModuleHandle, &kernel32ModuleInfo, sizeof(kernel32ModuleInfo)))
+		throw RuntimeException("Could not retrieve the own kernel32.dll module information");
+
+	// TODO: very unsafe, there is no guarantee that the DLLs are located at the same virtual address
+	this->kernel32Base = kernel32ModuleInfo.lpBaseOfDll;
+
+	this->offsetLoadLibraryA = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "LoadLibraryA");
+	this->offsetGetModuleHandleExA = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "GetModuleHandleExA");
+	this->offsetGetProcAddress = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "GetProcAddress");
+	this->offsetK32GetModuleInformation = this->calculateSymbolOffset(kernel32ModuleHandle, kernel32ModuleInfo.lpBaseOfDll, "K32GetModuleInformation");
 }
 
 size_t Injector::calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAddress, const char * name) const
@@ -98,6 +358,33 @@ size_t Injector::calculateSymbolOffset(HMODULE moduleHandle, void * moduleBaseAd
 		throw RuntimeException("Could not retrieve the function address");
 
 	return (size_t)address - (size_t)moduleBaseAddress;
+}
+
+void Injector::loadOwnSymbols()
+{
+	string name = "inspectDLL";
+	byte * pByte;
+	int offset;
+
+	cout << "[parent] - Loading local function \"" << name << "\"" << endl;
+
+	this->pInspectDLL = (void(*)(InspectDLLContext*))GetProcAddress(Injector::hCodeLibModule, name.c_str());
+	if (!pInspectDLL)
+		throw RuntimeException("Could not load own symbol \"inspectDLL\"");
+
+	cout << "[parent]   - Found function at 0x" << COUT_HEX_32 << this->pInspectDLL << endl;
+
+	pByte = (byte*)this->pInspectDLL;
+	if (pByte[0] == Assembler::JumpNear)
+	{
+		cout << "[parent]   - Found near jump at 0x" << COUT_HEX_32 << (size_t)pByte << endl;
+		offset = *(int*)(pByte + 1);
+		offset += 5; // Jump near instruction size
+		this->pInspectDLL = (void(*)(InspectDLLContext*))(((size_t)this->pInspectDLL) + offset);
+		cout << "[parent]   - Relocating local function according to offset 0x" << COUT_HEX_32 << offset << endl;
+	}
+
+	cout << "[parent] - Local function at 0x" << COUT_HEX_32 << this->pInspectDLL << endl;
 }
 
 void Injector::prepareCodeCaves()
@@ -244,4 +531,83 @@ void Injector::inject(shared_ptr<CodeCave> codeCave)
 	cout << "[parent]   - Injected " << dec << codeCave->getSourceBytesToMove() << " bytes at 0x" <<
 		COUT_HEX_32 << codeCave->getCallAddress() << endl;
 	cout << "[parent] - Injections performed" << endl;
+}
+
+void Injector::inspectInjectedDLL(const string & fileName, const void * fileNameAddress)
+{
+	InspectDLLContext context;
+	void * contextAddress;
+	//void * remoteFunctionAddress;
+
+	memset(&context, 0x0, sizeof(context));
+	context.dllName = (const char *)fileNameAddress;
+	context.pGetModuleHandleEx = (bool(*)(DWORD, LPCSTR, HMODULE*))
+		((size_t)this->kernel32Base + this->offsetGetModuleHandleExA);
+	context.pGetModuleInformation = (bool(*)(HMODULE, LPCSTR))
+		((size_t)this->kernel32Base + this->offsetK32GetModuleInformation);
+
+	contextAddress = this->process->allocateMemory(sizeof(context));
+	this->process->writeMemory(&context, sizeof(context), contextAddress);
+	cout << "[parent] - Context written at 0x" << COUT_HEX_32 << contextAddress << endl;
+
+	cout << "[parent] - Executing remote function..." << endl;
+	this->executeLocalFunctionRemotely(this->pInspectDLL, contextAddress);
+	/*remoteFunctionAddress = this->injectLocalFunction(this->pInspectDLL);
+
+	cout << "[parent]   - Spawning thread at 0x" << COUT_HEX_32 << remoteFunctionAddress << endl;
+	cin.get();
+	this->process->spawnThread(remoteFunctionAddress, contextAddress);*/
+}
+
+void Injector::inspectInjectedDLL(void * address)
+{
+	// TODO: experimental implementation
+
+	InspectStealthDLLContext context;
+	void * contextAddress;
+	void * remoteFunctionAddress;
+	MODULEINFO moduleInfo;
+
+	context.moduleBaseAddress = address;
+
+	// Define the API function addresses that will be used by CodeLib
+	context.pGetModuleHandleEx = (bool(*)(DWORD, LPCSTR, HMODULE*))
+		((size_t)this->kernel32Base + this->offsetGetModuleHandleExA);
+	context.pGetProcAddress = (FARPROC(*)(HMODULE, LPCSTR))
+		((size_t)this->kernel32Base + this->offsetGetProcAddress);
+
+	contextAddress = this->process->allocateMemory(sizeof(context));
+	this->process->writeMemory(&context, sizeof(context), contextAddress);
+	cout << "[parent] - Context written at 0x" << COUT_HEX_32 << contextAddress << endl;
+
+	remoteFunctionAddress = this->injectLocalFunction(this->pInspectDLL);
+
+	cout << "[parent]   - Spawning thread at 0x" << COUT_HEX_32 << remoteFunctionAddress << endl;
+	cin.get();
+	this->process->spawnThread(remoteFunctionAddress, contextAddress);
+
+	this->process->readMemory(contextAddress, &context, sizeof(context));
+	cout << "[parent] - Retrieved hModule: 0x" << COUT_HEX_32 << context.hModule << endl;
+
+	/*this->process->getModuleInfo(context.hModule, &moduleInfo);
+	cout << "[parent] - Retrieved module base address: 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll << endl;*/
+}
+
+void * Injector::injectLocalFunction(const void * function)
+{
+	// TODO: a fixed function size is highly inflexible,
+	// but it's complicated to programmatically retrieve a function size
+	const size_t functionSize = 512;
+
+	void * address = this->process->allocateMemory(functionSize);
+
+	//cout << "[parent] - Local function at 0x" << COUT_HEX_32 << function << endl;
+	//cout << "[parent] - Injecting function at 0x" << COUT_HEX_32 << address << endl;
+
+	// NOTE: Win32 function addresses are not necessarily valid in the target process's virtual address space
+	this->process->writeMemory(function, functionSize, address);
+
+	cout << "[parent] - Injected function at 0x" << COUT_HEX_32 << address << endl;
+
+	return address;
 }

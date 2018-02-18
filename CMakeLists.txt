@@ -10,6 +10,7 @@ add_executable(wintest main.cpp
 	supervisor/injector.cpp
 	supervisor/process.cpp
 	supervisor/codecave.cpp
+	supervisor/assembler.cpp
 	supervisor/runtime-exception.cpp
 	supervisor/util.cpp)
 target_link_libraries(wintest Psapi)
@@ -17,3 +18,5 @@ target_link_libraries(wintest Psapi)
 add_executable(child child/child.cpp)
 
 add_library(paquet SHARED library/library.cpp)
+
+add_library(codelib SHARED codelib/codelib.cpp)

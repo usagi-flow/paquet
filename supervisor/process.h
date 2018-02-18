@@ -26,6 +26,9 @@ class Process
 		virtual void copyMemory(void * source, void * destination, size_t size);
 		virtual void readMemory(void * source, void * buffer, size_t size) const;
 		virtual void writeMemory(const void * buffer, size_t size, void * destination);
+		virtual HANDLE spawnThread(void * address, void * parameter);
+		virtual void getModules();
+		virtual void getModuleInfo(HMODULE hModule, MODULEINFO * moduleInfo);
 
 		/**
 		 * Retrieves the thread context of the main process thread. Requires the main thread to be suspended.

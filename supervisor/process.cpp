@@ -15,6 +15,10 @@ Process::~Process() noexcept(false)
 	if (this->processInfo.hProcess)
 	{
 		cout << "[parent] Performing destruction" << endl;
+
+		if (this->threadContext->Rip)
+			this->resume();
+
 		if (!CloseHandle(this->processInfo.hProcess))
 		{
 			cerr << "[parent] Destruction failed" << endl;
@@ -137,6 +141,67 @@ void Process::writeMemory(const void * buffer, size_t size, void * destination)
 		throw RuntimeException("Could not write child memory");
 
 	//Util::printHexDump("writeMemory() buffer", buffer, size);
+}
+
+HANDLE Process::spawnThread(void * address, void * parameter)
+{
+	HANDLE handle = CreateRemoteThread(
+		this->processInfo.hProcess, 0x0, 0x0, (LPTHREAD_START_ROUTINE)address, parameter, 0x0, 0x0);
+
+	if (!handle)
+		throw RuntimeException("Could not spawn the remote thread");
+
+	WaitForSingleObject(handle, INFINITE);
+
+	return handle;
+}
+
+void Process::getModules()
+{
+	HMODULE modules[512];
+	DWORD bytesNeeded;
+	bool success;
+	unsigned short moduleCount;
+	MODULEINFO moduleInfo;
+	char moduleName[512];
+
+	success = EnumProcessModules(
+		this->processInfo.hProcess, modules, sizeof(modules), &bytesNeeded);
+
+	if (!success)
+		throw RuntimeException("Could not enumerate the process modules");
+
+	moduleCount = bytesNeeded / sizeof(HMODULE);
+
+	cout << "[parent] - Retrieved modules: " << dec << (bytesNeeded / sizeof(HMODULE)) << endl;
+
+	for (unsigned short i = 0; i < moduleCount; ++i)
+	{
+		success = GetModuleInformation(this->processInfo.hProcess, modules[i], &moduleInfo, sizeof(moduleInfo));
+
+		if (!success)
+		{
+			cerr << "[parent]   - Failed to retrieve the module info for handle: 0x" << COUT_HEX_32 << modules[i] << endl;
+			throw RuntimeException("Could not retrieve the module information");
+		}
+
+		bytesNeeded = GetModuleBaseName(this->processInfo.hProcess, modules[i], moduleName, sizeof(moduleName));
+
+		cout << "[parent]   - Module: " << moduleName <<
+			" at 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll <<
+			", entry point at 0x" << moduleInfo.lpBaseOfDll << endl;
+		/*cout << "[parent]   - Module base: 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll << endl;
+		cout << "[parent]   - Module entry point: 0x" << COUT_HEX_32 << moduleInfo.EntryPoint << endl;
+		cout << "[parent]   - Module size: 0x" << COUT_HEX_32 << moduleInfo.SizeOfImage << endl;*/
+	}
+}
+
+void Process::getModuleInfo(HMODULE hModule, MODULEINFO * moduleInfo)
+{
+	bool success = GetModuleInformation(this->processInfo.hProcess, hModule, moduleInfo, sizeof(MODULEINFO));
+
+	if (!success)
+		throw RuntimeException("Could not retrieve the module information");
 }
 
 shared_ptr<CONTEXT> Process::getMainThreadContext() const

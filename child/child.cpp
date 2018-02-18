@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
-//#include <cstdio>
+#include <chrono>
+#include <thread>
 #include <windows.h>
 
 using namespace std;
@@ -13,9 +14,12 @@ int main(int argcv, char* argv[])
 
 	cout << "[child] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
 
-	//printf("Press enter to continue\n");
-	//cin >> buffer;
-	//cin.get();
+	/*cout << "[child] Resuming execution in 3s..." << endl;
+	this_thread::sleep_for(chrono::milliseconds(1000));
+	cout << "[child] Resuming execution in 2s..." << endl;
+	this_thread::sleep_for(chrono::milliseconds(1000));
+	cout << "[child] Resuming execution in 1s..." << endl;
+	this_thread::sleep_for(chrono::milliseconds(1000));*/
 
 	cout << "[child] Writing to file" << endl;
 

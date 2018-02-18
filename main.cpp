@@ -51,7 +51,10 @@ int run(int argc, char* argv[])
 	process->start(true);
 	this_thread::sleep_for(chrono::milliseconds(250));
 
+	injector.prepare();
 	injector.performInjections();
+	//injector.injectDLL("psapi.dll");
+	injector.injectDLL("paquet.dll");
 
 	cin.get();
 	this_thread::sleep_for(chrono::milliseconds(250));
@@ -59,7 +62,7 @@ int run(int argc, char* argv[])
 	process->resume();
 	this_thread::sleep_for(chrono::milliseconds(250));
 
-	cin.get();
+	//cin.get();
 
 	return 0;
 }
