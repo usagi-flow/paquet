@@ -7,8 +7,10 @@ project (wintest)
 set(CMAKE_CXX_FLAGS "-g -std=c++14 ${CMAKE_CXX_FLAGS}")
 
 add_executable(wintest main.cpp
+	supervisor/interceptor.cpp
 	supervisor/injector.cpp
 	supervisor/process.cpp
+	supervisor/dll.cpp
 	supervisor/codecave.cpp
 	supervisor/assembler.cpp
 	supervisor/runtime-exception.cpp

@@ -52,7 +52,7 @@ void Injector::performInjections()
 	this->inject(this->cave_NtCreateFile);
 }
 
-void Injector::injectDLL(const string & fileName)
+shared_ptr<DLL> Injector::injectDLL(const string & fileName)
 {
 	void * fileNameAddress;
 	void * loadLibraryAddress;
@@ -70,7 +70,7 @@ void Injector::injectDLL(const string & fileName)
 
 	cout << "[parent] - Injected DLL" << endl;
 
-	this->inspectInjectedDLL(fileName, fileNameAddress);
+	return this->inspectInjectedDLL(fileName, fileNameAddress);
 }
 
 void _injectDLL(const string & fileName)
@@ -266,6 +266,28 @@ void * Injector::executeLocalFunctionRemotely(void * function, void * context, s
 	cout << "[parent] - Function invoked" << endl;
 
 	return contextAddress;
+}
+
+void * Injector::getRemoteFunctionAddress(std::shared_ptr<DLL> dll, const std::string & functionName)
+{
+	LoadFunctionAddressContext context;
+
+	cout << "[parent] - Loading remote function address for \"" << functionName << "\"" << endl;
+
+	memset(&context, 0x0, sizeof(context));
+
+	context.hModule = dll->getHandle();
+	context.functionName = (const char *)this->injectString(functionName);
+	context.pGetProcAddress = (FARPROC(*)(HMODULE, LPCSTR))
+	((size_t)this->kernel32Base + this->offsetGetProcAddress);
+
+	this->executeLocalFunctionRemotely(this->pLoadFunctionAddress,
+	&context, sizeof(context));
+
+	if (!context.functionAddress)
+		throw RuntimeException("Could not load the remote function address");
+
+	return context.functionAddress;
 }
 
 void Injector::loadCodeLib()
@@ -572,13 +594,12 @@ void Injector::inject(shared_ptr<CodeCave> codeCave)
 	cout << "[parent] - Injections performed" << endl;
 }
 
-void Injector::inspectInjectedDLL(const string & fileName, const void * fileNameAddress)
+shared_ptr<DLL> Injector::inspectInjectedDLL(const string & fileName, const void * fileNameAddress)
 {
+	shared_ptr<DLL> dll;
 	InspectDLLContext inspectContext;
-	LoadFunctionAddressContext loadFunctionAddressContext;
 
 	memset(&inspectContext, 0x0, sizeof(inspectContext));
-	memset(&loadFunctionAddressContext, 0x0, sizeof(loadFunctionAddressContext));
 
 	inspectContext.dllName = (const char *)fileNameAddress;
 	inspectContext.pGetCurrentProcess = (HANDLE(*)())
@@ -591,17 +612,11 @@ void Injector::inspectInjectedDLL(const string & fileName, const void * fileName
 	this->executeLocalFunctionRemotely(this->pInspectDLL,
 		&inspectContext, sizeof(inspectContext));
 
+	dll = make_shared<DLL>(fileName, inspectContext.hModule, inspectContext.moduleBaseAddress);
+
 	cout << "[parent] - Module base address: 0x" << COUT_HEX_32 << inspectContext.moduleBaseAddress << endl;
 
-	loadFunctionAddressContext.hModule = inspectContext.hModule;
-	loadFunctionAddressContext.functionName = (const char *)this->injectString("onNtCreateFile");
-	loadFunctionAddressContext.pGetProcAddress = (FARPROC(*)(HMODULE, LPCSTR))
-		((size_t)this->kernel32Base + this->offsetGetProcAddress);
-
-	this->executeLocalFunctionRemotely(this->pLoadFunctionAddress,
-		&loadFunctionAddressContext, sizeof(loadFunctionAddressContext));
-
-	cout << "[parent] - onNtCreateFile() address: 0x" << COUT_HEX_32 << loadFunctionAddressContext.functionAddress << endl;
+	return dll;
 }
 
 void Injector::inspectInjectedDLL(void * address)

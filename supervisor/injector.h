@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include "process.h"
+#include "dll.h"
 #include "codecave.h"
 #include "assembler.h"
 #include "../codelib/codelib.h"
@@ -16,7 +17,7 @@ class Injector
 
 		virtual void prepare();
 		virtual void performInjections();
-		virtual void injectDLL(const std::string & fileName);
+		virtual std::shared_ptr<DLL> injectDLL(const std::string & fileName);
 		virtual void injectDLLStealthed(const std::string & fileName);
 		virtual void * injectString(const std::string & value);
 
@@ -27,6 +28,8 @@ class Injector
 		memory after the remote thread completes.
 		*/
 		virtual void * executeLocalFunctionRemotely(void * function, void * context, size_t contextSize);
+
+		virtual void * getRemoteFunctionAddress(std::shared_ptr<DLL> dll, const std::string & functionName);
 	
 	protected:
 		static HMODULE hCodeLibModule;
@@ -71,7 +74,7 @@ class Injector
 		virtual void writeSourceBytes(byte * buffer, size_t offset, std::shared_ptr<CodeCave> codeCave) const;
 		virtual void inject(std::shared_ptr<CodeCave> codeCave);
 
-		virtual void inspectInjectedDLL(const std::string & fileName, const void * fileNameAddress);
+		virtual std::shared_ptr<DLL> inspectInjectedDLL(const std::string & fileName, const void * fileNameAddress);
 		virtual void inspectInjectedDLL(void * address);
 		virtual void * injectLocalFunction(const void * function);
 };

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
-#include "supervisor/injector.h"
+#include "supervisor/interceptor.h"
 #include "supervisor/process.h"
 
 using namespace std;
@@ -46,21 +46,17 @@ int run(int argc, char* argv[])
 	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
 
 	shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
-	Injector injector = Injector(process);
+	Interceptor interceptor = Interceptor(process);
 
 	process->start(true);
 	this_thread::sleep_for(chrono::milliseconds(250));
 
-	injector.prepare();
-	injector.performInjections();
-	injector.injectDLL("paquet.dll");
+	interceptor.run();
 
 	this_thread::sleep_for(chrono::milliseconds(250));
 
 	process->resume();
 	this_thread::sleep_for(chrono::milliseconds(250));
-
-	//cin.get();
 
 	return 0;
 }
