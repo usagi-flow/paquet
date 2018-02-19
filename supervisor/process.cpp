@@ -1,5 +1,7 @@
 #include "process.h"
 
+#define DEBUG 0x0
+
 using namespace std;
 
 Process::Process(const char * name)
@@ -7,14 +9,18 @@ Process::Process(const char * name)
 	this->name = name;
 	memset(&(this->processInfo), 0, sizeof(this->processInfo));
 
+#if DEBUG > 0
 	cout << "[parent] * Initialized Process instance @ 0x" << COUT_HEX_32 << this << endl;
+#endif
 }
 
 Process::~Process() noexcept(false)
 {
 	if (this->processInfo.hProcess)
 	{
+#if DEBUG > 0
 		cout << "[parent] Performing destruction" << endl;
+#endif
 
 		if (this->threadContext->Rip)
 			this->resume();
@@ -25,7 +31,9 @@ Process::~Process() noexcept(false)
 			throw RuntimeException("Could not close the child process handle");
 		}
 
+#if DEBUG > 0
 		cout << "[parent] Destruction succeeded" << endl;
+#endif
 
 		memset(&(this->processInfo), 0, sizeof(this->processInfo));
 	}
@@ -56,7 +64,9 @@ void Process::start(bool startSuspended)
 	if (startSuspended)
 		creationFlags |= CREATE_SUSPENDED;
 
+#if DEBUG > 0
 	cout << "[parent] Spawning child... (flags: 0x" << COUT_HEX << creationFlags << ")" << endl;
+#endif
 
 	success = CreateProcess(this->name, 0x0, 0x0, 0x0,
 		inheritHandles, creationFlags, environment, currentDirectory,
@@ -65,6 +75,7 @@ void Process::start(bool startSuspended)
 	if (!success)
 		throw RuntimeException("Could not create the child process");
 
+#if DEBUG > 0
 	cout << "[parent] Child spawned" << endl;
 
 	cout << COUT_HEX;
@@ -73,12 +84,15 @@ void Process::start(bool startSuspended)
 	cout << "[parent] - Thread handle:  " << this->processInfo.hThread << endl;
 	cout << "[parent] - Thread ID:      0x" << this->processInfo.dwThreadId << endl;
 	cout << dec;
+#endif
 
 	//this->analyzeMemory();
 
 	if (startSuspended)
 	{
+#if DEBUG > 0
 		cout << "[parent] - Process started in suspended mode" << endl;
+#endif
 		this->readMainThreadContext();
 		//this->dumpRegisters();
 	}
@@ -86,7 +100,9 @@ void Process::start(bool startSuspended)
 
 void Process::resume()
 {
+#if DEBUG > 0
 	cout << "[parent] Resuming child thread" << endl;
+#endif
 
 	memset(this->threadContext.get(), 0x0, sizeof(CONTEXT));
 	//this->threadContext.reset();
@@ -106,9 +122,11 @@ void Process::copyMemory(void * source, void * destination, size_t size)
 	bool success;
 	byte * buffer = new byte[size];
 
+#if DEBUG > 0
 	cout << "Copying " << dec << size << " bytes from " <<
 		hex << setw(8) << setfill('0') << uppercase << source;
 	cout << " to " << hex << setw(8) << setfill('0') << uppercase << destination << endl;
+#endif
 	
 	success = ReadProcessMemory(this->processInfo.hProcess, source, buffer, size, 0x0);
 
@@ -173,7 +191,9 @@ void Process::getModules()
 
 	moduleCount = bytesNeeded / sizeof(HMODULE);
 
+#if DEBUG > 0
 	cout << "[parent] - Retrieved modules: " << dec << (bytesNeeded / sizeof(HMODULE)) << endl;
+#endif
 
 	for (unsigned short i = 0; i < moduleCount; ++i)
 	{
@@ -187,12 +207,11 @@ void Process::getModules()
 
 		bytesNeeded = GetModuleBaseName(this->processInfo.hProcess, modules[i], moduleName, sizeof(moduleName));
 
+#if DEBUG > 0
 		cout << "[parent]   - Module: " << moduleName <<
 			" at 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll <<
 			", entry point at 0x" << moduleInfo.lpBaseOfDll << endl;
-		/*cout << "[parent]   - Module base: 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll << endl;
-		cout << "[parent]   - Module entry point: 0x" << COUT_HEX_32 << moduleInfo.EntryPoint << endl;
-		cout << "[parent]   - Module size: 0x" << COUT_HEX_32 << moduleInfo.SizeOfImage << endl;*/
+#endif
 	}
 }
 
@@ -214,14 +233,22 @@ void Process::setRIP(void * rip)
 	if (!this->threadContext->ContextFlags)
 		throw RuntimeException("The RIP register cannot be modified: The thread must be suspended.");
 
+#if DEBUG > 0
 	cout << "[parent] - Setting RIP to 0x" << COUT_HEX_32 << rip << endl;
+#endif
 
 	this->threadContext->Rip = (size_t)rip;
 
 	if (SetThreadContext(this->processInfo.hThread, this->threadContext.get()))
+	{
+#if DEBUG > 0
 		cout << "[parent] - Updated the thread context" << endl;
+#endif
+	}
 	else
+	{
 		throw RuntimeException("Could not modify the thread context");
+	}
 }
 
 void Process::analyzeMemory()
@@ -230,10 +257,15 @@ void Process::analyzeMemory()
 	memset(this->memoryInfo.get(), 0x0, sizeof(MEMORY_BASIC_INFORMATION));
 
 	if (VirtualQueryEx(this->processInfo.hProcess, 0x0, this->memoryInfo.get(), sizeof(MEMORY_BASIC_INFORMATION)))
+	{
 		cout << "[parent] - Retrieved the memory info" << endl;
+	}
 	else
+	{
 		throw RuntimeException("Could not retrieve the memory info");
+	}
 
+#if DEBUG > 0
 	cout << "[parent]   - Base address:         0x" << COUT_HEX_32 << this->memoryInfo->BaseAddress << endl;
 	cout << "[parent]   - Allocation base:      0x" << COUT_HEX_32 << this->memoryInfo->AllocationBase << endl;
 	cout << "[parent]   - Allocation protect:   0x" << COUT_HEX_32 << this->memoryInfo->AllocationProtect << endl;
@@ -241,6 +273,7 @@ void Process::analyzeMemory()
 	cout << "[parent]   - State:                0x" << COUT_HEX_32 << this->memoryInfo->State << endl;
 	cout << "[parent]   - Protect:              0x" << COUT_HEX_32 << this->memoryInfo->Protect << endl;
 	cout << "[parent]   - Type:                 0x" << COUT_HEX_32 << this->memoryInfo->Type << endl;
+#endif
 }
 
 void Process::readMainThreadContext()
@@ -250,9 +283,15 @@ void Process::readMainThreadContext()
 	this->threadContext->ContextFlags = CONTEXT_ALL;
 
 	if (GetThreadContext(this->processInfo.hThread, this->threadContext.get()))
+	{
+#if DEBUG > 0
 		cout << "[parent] - Retrieved the child thread context" << endl;
+#endif
+	}
 	else
+	{
 		throw RuntimeException("Could not retrieve the child thread context");
+	}
 }
 
 void Process::dumpRegisters() const
@@ -271,6 +310,7 @@ void Process::dumpRegisters(const CONTEXT * threadContext) const
 		return;
 	}
 
+#if DEBUG > 0
 	cout << "[parent]   - RAX: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rax << endl;
 	cout << "[parent]   - RCX: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rcx << endl;
 	cout << "[parent]   - RDX: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rdx << endl;
@@ -280,4 +320,5 @@ void Process::dumpRegisters(const CONTEXT * threadContext) const
 	cout << "[parent]   - RSI: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rsi << endl;
 	cout << "[parent]   - RDI: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rdi << endl;
 	cout << "[parent]   - RIP: 0x" << hex << setw(8) << setfill('0') << uppercase << context->Rip << endl;
+#endif
 }

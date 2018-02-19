@@ -16,10 +16,19 @@ class Injector
 		virtual ~Injector() noexcept(false);
 
 		virtual void prepare();
+
 		virtual void performInjections();
+
 		virtual std::shared_ptr<DLL> injectDLL(const std::string & fileName);
+
 		virtual void injectDLLStealthed(const std::string & fileName);
+
 		virtual void * injectString(const std::string & value);
+
+		virtual void injectCodeCave(std::shared_ptr<CodeCave> codeCave);
+
+		virtual std::shared_ptr<CodeCave> createCodeCave(
+			void * callAddress, size_t size, size_t sourceBytesToMove) const;
 
 		/**
 		Executes the local function referred by <code>function</code> remotely in a separate thread.
@@ -28,6 +37,8 @@ class Injector
 		memory after the remote thread completes.
 		*/
 		virtual void * executeLocalFunctionRemotely(void * function, void * context, size_t contextSize);
+
+		virtual std::shared_ptr<DLL> getRemoteDLL(const std::string & fileName);
 
 		virtual void * getRemoteFunctionAddress(std::shared_ptr<DLL> dll, const std::string & functionName);
 	
@@ -68,11 +79,7 @@ class Injector
 		virtual void loadLocalSymbols();
 		virtual void * loadLocalSymbol(const std::string & name);
 		virtual void prepareCodeCaves();
-		virtual std::shared_ptr<CodeCave> createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const;
-		virtual void writeNop(byte * buffer, size_t offset, size_t count) const;
-		virtual void writeJumpNear(byte * buffer, size_t offset, void * source, void * destination) const;
 		virtual void writeSourceBytes(byte * buffer, size_t offset, std::shared_ptr<CodeCave> codeCave) const;
-		virtual void inject(std::shared_ptr<CodeCave> codeCave);
 
 		virtual std::shared_ptr<DLL> inspectInjectedDLL(const std::string & fileName, const void * fileNameAddress);
 		virtual void inspectInjectedDLL(void * address);

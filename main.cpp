@@ -49,11 +49,11 @@ int run(int argc, char* argv[])
 	Interceptor interceptor = Interceptor(process);
 
 	process->start(true);
-	this_thread::sleep_for(chrono::milliseconds(250));
+	//this_thread::sleep_for(chrono::milliseconds(250));
 
 	interceptor.run();
 
-	this_thread::sleep_for(chrono::milliseconds(250));
+	//this_thread::sleep_for(chrono::milliseconds(250));
 
 	process->resume();
 	this_thread::sleep_for(chrono::milliseconds(250));

@@ -1,5 +1,7 @@
 #include "codelib.h"
 
+#define DEBUG 0x0
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
@@ -11,10 +13,14 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		onDLLDetached();
 		break;
 	case DLL_THREAD_ATTACH:
+#if DEBUG > 0
 		printf("[library] DLL_THREAD_ATTACH\n");
+#endif
 		break;
 	case DLL_THREAD_DETACH:
+#if DEBUG > 0
 		printf("[library] DLL_THREAD_DETACH\n");
+#endif
 		break;
 	default:
 		printf("[library] DllMain invoked, reason unknown\n");
@@ -26,17 +32,23 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 void onDLLAttached()
 {
+#if DEBUG > 0
 	printf("[codelib] DLL_PROCESS_ATTACH\n");
+#endif
 }
 
 void onDLLDetached()
 {
+#if DEBUG > 0
 	printf("[codelib] DLL_PROCESS_DETACH\n");
+#endif
 }
 
 void testDLL()
 {
+#if DEBUG > 0
 	printf("[codelib] Test successful\n");
+#endif
 }
 
 void inspectDLL(InspectDLLContext * context)

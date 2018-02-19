@@ -18,13 +18,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		onDLLAttached();
 		break;
 	case DLL_PROCESS_DETACH:
-		printf("[library] DLL_PROCESS_DETACH\n");
+		onDLLDetached();
 		break;
 	case DLL_THREAD_ATTACH:
-		printf("[library] DLL_THREAD_ATTACH\n");
+		//printf("[library] * DLL_THREAD_ATTACH\n");
 		break;
 	case DLL_THREAD_DETACH:
-		printf("[library] DLL_THREAD_DETACH\n");
+		//printf("[library] * DLL_THREAD_DETACH\n");
 		break;
 	default:
 		printf("[library] DllMain invoked, reason unknown\n");
@@ -45,7 +45,7 @@ void onDLLAttached()
 
 	ownHModule = GetModuleHandle("paquet.dll");
 
-	printf("[library] Module handle:        0x%08x\n", ownHModule);
+	//printf("[library] Module handle:        0x%08x\n", ownHModule);
 
 	success = GetModuleInformation(GetCurrentProcess(), ownHModule, &ownModuleInfo, sizeof(ownModuleInfo));
 
@@ -55,12 +55,27 @@ void onDLLAttached()
 		return;
 	}
 
-	printf("[library] Module base:          0x%08x\n", ownModuleInfo.lpBaseOfDll);
+	/*printf("[library] Module base:          0x%08x\n", ownModuleInfo.lpBaseOfDll);
 	printf("[library] Module entry point:   0x%08x\n", ownModuleInfo.EntryPoint);
-	printf("[library] Module size:          0x%08x\n", ownModuleInfo.SizeOfImage);
+	printf("[library] Module size:          0x%08x\n", ownModuleInfo.SizeOfImage);*/
+}
+
+void onDLLDetached()
+{
+	printf("[library] DLL_PROCESS_DETACH\n");
 }
 
 void onNtCreateFile()
 {
 	printf("[library] File creation intercepted!\n");
+}
+
+void onNtWriteFile()
+{
+	//printf("[library] File write intercepted!\n");
+}
+
+void onNtClose()
+{
+	printf("[library] Close intercepted!\n");
 }

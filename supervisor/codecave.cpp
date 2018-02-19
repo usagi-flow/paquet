@@ -19,8 +19,6 @@ void CodeCave::initialize(size_t size)
 	this->size = size;
 	this->sourceBytesToMove = 0x0;
 	this->data = make_shared<vector<byte>>(size);
-
-	cout << "[parent] * Initialized CodeCave instance with " << dec << this->data->size() << " elements" << endl;
 }
 
 byte& CodeCave::operator[](int i)

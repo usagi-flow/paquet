@@ -8,13 +8,15 @@ Assembler::~Assembler() noexcept(false)
 {
 }
 
-void Assembler::writeNop(byte * buffer, size_t offset, size_t count)
+size_t Assembler::writeNop(byte * buffer, size_t offset, size_t count)
 {
 	for (size_t i = 0; i < count; ++i)
 		buffer[offset + i] = 0x90;
+
+	return 1;
 }
 
-void Assembler::writePush(byte * buffer, size_t offset, Register operand)
+size_t Assembler::writePush(byte * buffer, size_t offset, Register operand)
 {
 	byte code = 0x90;
 
@@ -38,9 +40,11 @@ void Assembler::writePush(byte * buffer, size_t offset, Register operand)
 	}
 
 	buffer[offset] = code;
+
+	return 1;
 }
 
-void Assembler::writePop(byte * buffer, size_t offset, Register operand)
+size_t Assembler::writePop(byte * buffer, size_t offset, Register operand)
 {
 	byte code = 0x90;
 
@@ -64,14 +68,18 @@ void Assembler::writePop(byte * buffer, size_t offset, Register operand)
 	}
 
 	buffer[offset] = code;
+
+	return 1;
 }
 
-void Assembler::writeRet(byte * buffer, size_t offset)
+size_t Assembler::writeRet(byte * buffer, size_t offset)
 {
 	buffer[offset] = 0xC3;
+
+	return 1;
 }
 
-void Assembler::writeJumpNear(byte * buffer, size_t offset, void * source, void * destination)
+size_t Assembler::writeJumpNear(byte * buffer, size_t offset, void * source, void * destination)
 {
 	// General notes:
 	// EB:		Jump short	(jump -128 to 127 of the IP)
@@ -106,4 +114,81 @@ void Assembler::writeJumpNear(byte * buffer, size_t offset, void * source, void 
 	buffer[offset + 2] = addressOffsetBytes[1];
 	buffer[offset + 3] = addressOffsetBytes[2];
 	buffer[offset + 4] = addressOffsetBytes[3];
+
+	return 5;
+}
+
+size_t Assembler::writeCallNear(byte * buffer, size_t offset, void * source, void * destination)
+{
+	Assembler::writeJumpNear(buffer, offset, source, destination);
+	buffer[offset] = 0xE8;
+
+	return 2;
+}
+
+size_t Assembler::writeCallReg(byte * buffer, size_t offset, Register operand)
+{
+	byte code = 0x90;
+
+	switch (operand)
+	{
+	case Assembler::RAX:
+		code = 0xD0;
+		break;
+	case Assembler::RBX:
+		code = 0xD3;
+		break;
+	case Assembler::RCX:
+		code = 0xD1;
+		break;
+	case Assembler::RDX:
+		code = 0xD2;
+		break;
+	default:
+		throw RuntimeException("Unsupported operand");
+		break;
+	}
+
+	buffer[offset] = 0xFF;
+	buffer[offset + 1] = code;
+
+	return 2;
+}
+
+size_t Assembler::writeMovReg(byte * buffer, size_t offset, Register operand, size_t value)
+{
+	byte regOperand = 0x90;
+	size_t i = 0;
+
+	switch (operand)
+	{
+	case Assembler::RAX:
+		regOperand = 0xB8;
+		break;
+	case Assembler::RBX:
+		regOperand = 0xBB;
+		break;
+	case Assembler::RCX:
+		regOperand = 0xB9;
+		break;
+	case Assembler::RDX:
+		regOperand = 0xBA;
+		break;
+	default:
+		throw RuntimeException("Unsupported operand");
+		break;
+	}
+
+	buffer[offset + i++] = 0x48;
+	buffer[offset + i++] = regOperand;
+	buffer[offset + i++] = ((byte*)&value)[0];
+	buffer[offset + i++] = ((byte*)&value)[1];
+	buffer[offset + i++] = ((byte*)&value)[2];
+	buffer[offset + i++] = ((byte*)&value)[3];
+	buffer[offset + i++] = ((byte*)&value)[4];
+	buffer[offset + i++] = ((byte*)&value)[5];
+	buffer[offset + i++] = ((byte*)&value)[6];
+	buffer[offset + i++] = ((byte*)&value)[7];
+
+	return i;
 }

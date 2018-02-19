@@ -5,6 +5,8 @@
 
 #define INJECT_DLL_STEALTHED
 
+#define DEBUG 0x0
+
 using namespace std;
 
 HMODULE Injector::hCodeLibModule = 0x0;
@@ -28,8 +30,10 @@ Injector::Injector(std::shared_ptr<Process> process)
 	this->dllSize = 0x0;
 	this->pInspectDLL = 0x0;
 
+#if DEBUG > 0
 	cout << "[parent] * Initialized Injector instance @ 0x" << COUT_HEX_32 << this << endl;
 	cout << "[parent] * Process image name: " << this->process->getName() << endl;
+#endif
 }
 
 Injector::~Injector() noexcept(false)
@@ -48,8 +52,8 @@ void Injector::performInjections()
 	if (!this->initialRIP)
 		throw RuntimeException("The injector is not prepared");
 
-	this->inject(this->cave_RtlUserThreadStart);
-	this->inject(this->cave_NtCreateFile);
+	this->injectCodeCave(this->cave_RtlUserThreadStart);
+	this->injectCodeCave(this->cave_NtCreateFile);
 }
 
 shared_ptr<DLL> Injector::injectDLL(const string & fileName)
@@ -57,7 +61,9 @@ shared_ptr<DLL> Injector::injectDLL(const string & fileName)
 	void * fileNameAddress;
 	void * loadLibraryAddress;
 
+#if DEBUG > 0
 	cout << "[parent] - Injecting DLL: " << fileName << endl;
+#endif
 
 	// Calculate the remote LoadLibaryA() address
 	loadLibraryAddress = (void*)((size_t)this->kernel32Base + this->offsetLoadLibraryA);
@@ -68,7 +74,9 @@ shared_ptr<DLL> Injector::injectDLL(const string & fileName)
 	// Invoke the LoadLibaryA() function remotely
 	this->process->spawnThread(loadLibraryAddress, fileNameAddress);
 
+#if DEBUG > 0
 	cout << "[parent] - Injected DLL" << endl;
+#endif
 
 	return this->inspectInjectedDLL(fileName, fileNameAddress);
 }
@@ -192,7 +200,9 @@ void Injector::injectDLLStealthed(const string & fileName)
 	if (!this->initialRIP)
 		throw RuntimeException("The injector is not prepared");
 
+#if DEBUG > 0
 	cout << "[parent] - Injecting stealth DLL: " << fileName << endl;
+#endif
 
 	dll = ifstream(fileName, ifstream::ate | ifstream::binary);
 
@@ -204,9 +214,11 @@ void Injector::injectDLLStealthed(const string & fileName)
 	if (size > 0)
 	{
 		allocationSize = size + (sizeof(readBuffer) - (size % sizeof(readBuffer)));
+#if DEBUG > 0
 		cout << "[parent]   - Buffer size: " << dec << sizeof(readBuffer) << endl;
 		cout << "[parent]   - File size: " << dec << size << endl;
 		cout << "[parent]   - Allocation size: " << dec << allocationSize << endl;
+#endif
 
 		address = this->process->allocateMemory(size);
 
@@ -231,7 +243,9 @@ void Injector::injectDLLStealthed(const string & fileName)
 
 	dll.close();
 
+#if DEBUG > 0
 	cout << "[parent] - Injected DLL at 0x" << COUT_HEX_32 << address << endl;
+#endif
 
 	this->inspectInjectedDLL(address);
 }
@@ -247,15 +261,75 @@ void * Injector::injectString(const string & value)
 	return address;
 }
 
+void Injector::injectCodeCave(shared_ptr<CodeCave> codeCave)
+{
+	byte * jumpToCave;
+	size_t i = 0x0;
+
+	if (!codeCave.get())
+		return;
+
+#if DEBUG > 0
+	cout << "[parent] - Performing injections" << endl;
+#endif
+
+	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getCaveAddress());
+
+#if DEBUG > 0
+	cout << "[parent]   - Injected cave (" << dec << codeCave->getSize() << " bytes) at 0x" <<
+		COUT_HEX_32 << codeCave->getCaveAddress() << endl;
+#endif
+
+	jumpToCave = new byte[codeCave->getSourceBytesToMove()];
+	i += Assembler::writeNop(jumpToCave, i, codeCave->getSourceBytesToMove());
+	i = 0x0;
+	i += Assembler::writeJumpNear(jumpToCave, i, codeCave->getCallAddress(), codeCave->getCaveAddress());
+	this->process->writeMemory(jumpToCave, codeCave->getSourceBytesToMove(), codeCave->getCallAddress());
+	delete[] jumpToCave;
+
+#if DEBUG > 0
+	cout << "[parent]   - Injected " << dec << codeCave->getSourceBytesToMove() << " source bytes in cave at 0x" <<
+		COUT_HEX_32 << codeCave->getCallAddress() << endl;
+	cout << "[parent] - Injections performed" << endl;
+#endif
+}
+
+shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const
+{
+	shared_ptr<CodeCave> cave = make_shared<CodeCave>(size);
+	size_t offset;
+	size_t i = 0x0;
+
+	i += Assembler::writeNop(cave->getRawData(), i, cave->getSize());
+	cave->setCaveAddress(this->process->allocateMemory(size));
+	cave->setCallAddress(callAddress);
+	cave->setReturnAddress((void*)((size_t)callAddress + sourceBytesToMove));
+	cave->setSourceBytesToMove(sourceBytesToMove);
+
+	// Write at the end of the cave, to allow space for the cave implementation
+	offset = size - (sourceBytesToMove + JUMP_NEAR_SIZE);
+
+	this->writeSourceBytes(cave->getRawData(), offset, cave);
+	i += Assembler::writeJumpNear(cave->getRawData(), offset + sourceBytesToMove,
+		(void*)((size_t)cave->getCaveAddress() + offset + sourceBytesToMove),
+		cave->getReturnAddress());
+
+	return cave;
+}
+
 void * Injector::executeLocalFunctionRemotely(void * function, void * context, size_t contextSize)
 {
+#if DEBUG > 0
 	cout << "[parent] - Invoking function in remote process" << endl;
+#endif
 
 	void * functionAddress = this->injectLocalFunction(function);
 	void * contextAddress = this->process->allocateMemory(contextSize);
 
+#if DEBUG > 0
 	cout << "[parent]   - Remote function:  0x" << COUT_HEX_32 << functionAddress << endl;
 	cout << "[parent]   - Remote context:   0x" << COUT_HEX_32 << contextAddress << endl;
+#endif
 
 	this->process->writeMemory(context, contextSize, contextAddress);
 
@@ -263,16 +337,25 @@ void * Injector::executeLocalFunctionRemotely(void * function, void * context, s
 
 	this->process->readMemory(contextAddress, context, contextSize);
 
+#if DEBUG > 0
 	cout << "[parent] - Function invoked" << endl;
+#endif
 
 	return contextAddress;
+}
+
+shared_ptr<DLL> Injector::getRemoteDLL(const string & fileName)
+{
+	return this->inspectInjectedDLL(fileName, this->injectString(fileName));
 }
 
 void * Injector::getRemoteFunctionAddress(std::shared_ptr<DLL> dll, const std::string & functionName)
 {
 	LoadFunctionAddressContext context;
 
+#if DEBUG > 0
 	cout << "[parent] - Loading remote function address for \"" << functionName << "\"" << endl;
+#endif
 
 	memset(&context, 0x0, sizeof(context));
 
@@ -297,11 +380,15 @@ void Injector::loadCodeLib()
 
 	if (!Injector::hCodeLibModule)
 	{
+#if DEBUG > 0
 		cout << "[parent] - Loading codelib.dll" << endl;
+#endif
 		hModule = LoadLibrary("codelib.dll");
 		Injector::hCodeLibModule = hModule;
 
+#if DEBUG > 0
 		cout << "[parent] - CodeLib loaded, performing test" << endl;
+#endif
 
 		pTestDLL = (void(*)())GetProcAddress(hModule, "testDLL");
 		if (pTestDLL != 0x0)
@@ -311,23 +398,29 @@ void Injector::loadCodeLib()
 	}
 	else
 	{
+#if DEBUG > 0
 		cout << "[parent] - codelib.dll is already present" << endl;
+#endif
 	}
 
 	this->loadLocalSymbols();
 
+#if DEBUG > 0
 	cout << "[parent] - CodeLib module handle: 0x" << COUT_HEX_32 << hCodeLibModule << endl;
+#endif
 }
 
 void Injector::analyzeProcess()
 {
+#if DEBUG > 0
 	cout << "[parent] - Analyzing memory" << endl;
+#endif
 
 	this->initialRIP = (void*)this->process->getMainThreadContext()->Rip;
 	this->calculateSymbolOffsets();
 	this->ntdllBase = (void*)((size_t)this->initialRIP - this->offsetRtlUserThreadStart);
-	//this->kernel32Base = 0x0;
 
+#if DEBUG > 0
 	cout << "[parent] - Initial RIP:            0x" << COUT_HEX_32 << this->initialRIP << endl;
 	cout << "[parent] - Calculated ntdll base:  0x" << COUT_HEX_32 << this->ntdllBase << endl;
 
@@ -350,6 +443,7 @@ void Injector::analyzeProcess()
 		((size_t)this->kernel32Base + this->offsetGetProcAddress) << endl;
 	cout << "[parent] - kernel32.dll!K32GetModuleInformation: 0x" << COUT_HEX_32 <<
 		((size_t)this->kernel32Base + this->offsetK32GetModuleInformation) << endl;
+#endif
 }
 
 void Injector::calculateSymbolOffsets()
@@ -420,7 +514,9 @@ void * Injector::loadLocalSymbol(const string & name)
 	byte * pByte;
 	int offset;
 
+#if DEBUG > 0
 	cout << "[parent] - Loading local function \"" << name << "\"" << endl;
+#endif
 
 	// Retrieve the entry point address
 
@@ -428,7 +524,9 @@ void * Injector::loadLocalSymbol(const string & name)
 	if (!address)
 		throw RuntimeException("Could not load local symbol");
 
+#if DEBUG > 0
 	cout << "[parent]   - Found function at 0x" << COUT_HEX_32 << address << endl;
+#endif
 
 	// Verify if the address points to the function body or to a jump to the body;
 	// calculate the address of the effective function body if necessary
@@ -436,14 +534,20 @@ void * Injector::loadLocalSymbol(const string & name)
 	pByte = (byte*)address;
 	if (pByte[0] == Assembler::JumpNear)
 	{
+#if DEBUG > 0
 		cout << "[parent]   - Found near jump at 0x" << COUT_HEX_32 << (size_t)pByte << endl;
+#endif
 		offset = *(int*)(pByte + 1);
 		offset += 5; // Jump near instruction size
 		address = (void*)(((size_t)address) + offset);
+#if DEBUG > 0
 		cout << "[parent]   - Relocating local function according to offset 0x" << COUT_HEX_32 << offset << endl;
+#endif
 	}
 
+#if DEBUG > 0
 	cout << "[parent] - Local function at 0x" << COUT_HEX_32 << address << endl;
+#endif
 
 	return address;
 }
@@ -475,86 +579,6 @@ void Injector::prepareCodeCaves()
 	// Unicode string: 2 bytes per character, null == {0x0, 0x0}
 }
 
-shared_ptr<CodeCave> Injector::createCodeCave(void * callAddress, size_t size, size_t sourceBytesToMove) const
-{
-	shared_ptr<CodeCave> cave = make_shared<CodeCave>(size);
-	size_t offset;
-
-	this->writeNop(cave->getRawData(), 0, cave->getSize());
-	cave->setCaveAddress(this->process->allocateMemory(size));
-	cave->setCallAddress(callAddress);
-	cave->setReturnAddress((void*)((size_t)callAddress + sourceBytesToMove));
-	cave->setSourceBytesToMove(sourceBytesToMove);
-
-	// Write at the end of the cave, to allow space for the cave implementation
-	offset = size - (sourceBytesToMove + JUMP_NEAR_SIZE);
-
-	this->writeSourceBytes(cave->getRawData(), offset, cave);
-	this->writeJumpNear(cave->getRawData(), offset + sourceBytesToMove,
-		(void*)((size_t)cave->getCaveAddress() + offset + sourceBytesToMove),
-		cave->getReturnAddress());
-
-	/*cout << "[parent] - Prepared empty code cave at 0x" << COUT_HEX_32 << cave->getCaveAddress() << endl;
-	cout << "           - Call at 0x" << COUT_HEX_32 << cave->getCallAddress() << endl;*/
-
-	return cave;
-}
-
-void Injector::writeNop(byte * buffer, size_t offset, size_t count) const
-{
-	for (size_t i = 0; i < count; ++i)
-		buffer[offset + i] = 0x90;
-
-	/*cout << "[parent] - Wrote " << dec << count << " NOP bytes at offset 0x" <<
-		COUT_HEX_32 << offset << endl;*/
-}
-
-void Injector::writeJumpNear(byte * buffer, size_t offset, void * source, void * destination) const
-{
-	// General notes:
-	// EB:		Jump short	(jump -128 to 127 of the IP)
-	// E9:		Jump near	(jump within the code segment)
-	// FF/EA:	Jump far	(intersegment jump, same privilege level)
-
-	// From 00330000:
-	// JMP 76DF15E0 => E9 DB15AC76
-	// Because dest 76DF15E0 - (00330000 + [5]) = 76AC15DB
-
-	// From 00260000:
-	// JMP 76DCC520 => E9 1BC5B676
-	// Because dest 76DCC520 - (00260000 + [5]) = 0x76B6C51B
-
-	// From 00330200:
-	// JMP 00330000 => E9 FBFDFFFF
-	// Because FFFFFFFF - (00330200 + [4/5] - 00330000) = 0xFFFFFDFB
-	// * Why -1?
-
-	const size_t instructionSize = 5;
-	size_t addressOffset;
-	byte * addressOffsetBytes = (byte*)&addressOffset;
-
-	buffer[offset] = 0xE9;
-
-	if ((size_t)destination >= (size_t)source)
-	{
-		//cout << "[parent] - destination >= source" << endl;
-		addressOffset = (size_t)destination - ((size_t)source + instructionSize);
-	}
-	else
-	{
-		//cout << "[parent] - destination < source" << endl;
-		addressOffset = 0xFFFFFFFF - ((size_t)source + instructionSize - 1 - (size_t)destination);
-	}
-
-	buffer[offset + 1] = addressOffsetBytes[0];
-	buffer[offset + 2] = addressOffsetBytes[1];
-	buffer[offset + 3] = addressOffsetBytes[2];
-	buffer[offset + 4] = addressOffsetBytes[3];
-
-	/*cout << "[parent] - Wrote " << dec << instructionSize << " jump bytes at offset 0x" <<
-		COUT_HEX_32 << offset << endl;*/
-}
-
 void Injector::writeSourceBytes(byte * buffer, size_t offset, shared_ptr<CodeCave> codeCave) const
 {
 	byte * localBuffer = new byte[codeCave->getSourceBytesToMove()];
@@ -564,34 +588,6 @@ void Injector::writeSourceBytes(byte * buffer, size_t offset, shared_ptr<CodeCav
 		buffer[offset + i] = localBuffer[i];
 
 	delete[] localBuffer;
-
-	/*cout << "[parent] - Wrote " << dec << codeCave->getSourceBytesToMove() << " source bytes at offset 0x" <<
-		COUT_HEX_32 << offset << endl;*/
-}
-
-void Injector::inject(shared_ptr<CodeCave> codeCave)
-{
-	byte * jumpToCave;
-
-	if (!codeCave.get())
-		return;
-
-	cout << "[parent] - Performing injections" << endl;
-
-	this->process->writeMemory(codeCave->getRawData(), codeCave->getSize(), codeCave->getCaveAddress());
-
-	cout << "[parent]   - Injected " << dec << codeCave->getSize() << " bytes at 0x" <<
-		COUT_HEX_32 << codeCave->getCaveAddress() << endl;
-
-	jumpToCave = new byte[codeCave->getSourceBytesToMove()];
-	writeNop(jumpToCave, 0, codeCave->getSourceBytesToMove());
-	writeJumpNear(jumpToCave, 0, codeCave->getCallAddress(), codeCave->getCaveAddress());
-	this->process->writeMemory(jumpToCave, codeCave->getSourceBytesToMove(), codeCave->getCallAddress());
-	delete[] jumpToCave;
-
-	cout << "[parent]   - Injected " << dec << codeCave->getSourceBytesToMove() << " bytes at 0x" <<
-		COUT_HEX_32 << codeCave->getCallAddress() << endl;
-	cout << "[parent] - Injections performed" << endl;
 }
 
 shared_ptr<DLL> Injector::inspectInjectedDLL(const string & fileName, const void * fileNameAddress)
@@ -614,7 +610,9 @@ shared_ptr<DLL> Injector::inspectInjectedDLL(const string & fileName, const void
 
 	dll = make_shared<DLL>(fileName, inspectContext.hModule, inspectContext.moduleBaseAddress);
 
+#if DEBUG > 0
 	cout << "[parent] - Module base address: 0x" << COUT_HEX_32 << inspectContext.moduleBaseAddress << endl;
+#endif
 
 	return dll;
 }
@@ -626,7 +624,6 @@ void Injector::inspectInjectedDLL(void * address)
 	InspectStealthDLLContext context;
 	void * contextAddress;
 	void * remoteFunctionAddress;
-	MODULEINFO moduleInfo;
 
 	context.moduleBaseAddress = address;
 
@@ -638,19 +635,22 @@ void Injector::inspectInjectedDLL(void * address)
 
 	contextAddress = this->process->allocateMemory(sizeof(context));
 	this->process->writeMemory(&context, sizeof(context), contextAddress);
+#if DEBUG > 0
 	cout << "[parent] - Context written at 0x" << COUT_HEX_32 << contextAddress << endl;
+#endif
 
 	remoteFunctionAddress = this->injectLocalFunction(this->pInspectDLL);
 
+#if DEBUG > 0
 	cout << "[parent]   - Spawning thread at 0x" << COUT_HEX_32 << remoteFunctionAddress << endl;
+#endif
 	cin.get();
 	this->process->spawnThread(remoteFunctionAddress, contextAddress);
 
 	this->process->readMemory(contextAddress, &context, sizeof(context));
+#if DEBUG > 0
 	cout << "[parent] - Retrieved hModule: 0x" << COUT_HEX_32 << context.hModule << endl;
-
-	/*this->process->getModuleInfo(context.hModule, &moduleInfo);
-	cout << "[parent] - Retrieved module base address: 0x" << COUT_HEX_32 << moduleInfo.lpBaseOfDll << endl;*/
+#endif
 }
 
 void * Injector::injectLocalFunction(const void * function)
@@ -661,13 +661,12 @@ void * Injector::injectLocalFunction(const void * function)
 
 	void * address = this->process->allocateMemory(functionSize);
 
-	//cout << "[parent] - Local function at 0x" << COUT_HEX_32 << function << endl;
-	//cout << "[parent] - Injecting function at 0x" << COUT_HEX_32 << address << endl;
-
 	// NOTE: Win32 function addresses are not necessarily valid in the target process's virtual address space
 	this->process->writeMemory(function, functionSize, address);
 
+#if DEBUG > 0
 	cout << "[parent] - Injected function at 0x" << COUT_HEX_32 << address << endl;
+#endif
 
 	return address;
 }
