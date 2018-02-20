@@ -13,12 +13,13 @@ add_executable(wintest main.cpp
 	supervisor/dll.cpp
 	supervisor/codecave.cpp
 	supervisor/assembler.cpp
-	supervisor/runtime-exception.cpp
-	supervisor/util.cpp)
+	supervisor/util.cpp
+	shared/runtime-exception.cpp)
 target_link_libraries(wintest Psapi)
 
 add_executable(child child/child.cpp)
 
-add_library(paquet SHARED library/library.cpp)
+add_library(paquet SHARED library/library.cpp
+	shared/runtime-exception.cpp)
 
 add_library(codelib SHARED codelib/codelib.cpp)

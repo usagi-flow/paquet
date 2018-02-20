@@ -1,7 +1,6 @@
 #include "library.h"
 
 using namespace std;
-using namespace chrono;
 
 HMODULE ownHModule;
 MODULEINFO ownModuleInfo;
@@ -65,9 +64,80 @@ void onDLLDetached()
 	printf("[library] DLL_PROCESS_DETACH\n");
 }
 
+shared_ptr<CONTEXT> getContext()
+{
+	shared_ptr<CONTEXT> context = make_shared<CONTEXT>();
+	memset(context.get(), 0x0, sizeof(CONTEXT));
+
+	RtlCaptureContext(context.get());
+
+	return context;
+}
+
+shared_ptr<string> toString(const wchar_t * wCString)
+{
+	const size_t MAX_SIZE = 4096;
+	const char * pCString = (const char *)wCString;
+	char * result;
+	size_t size;
+
+	for (size_t i = 0; i < MAX_SIZE; ++i)
+	{
+		if (!*pCString)
+			break;
+		pCString = (const char *)((size_t)pCString + sizeof(wchar_t));
+	}
+
+	size = (size_t)pCString - (size_t)wCString;
+	result = new char[size];
+	pCString = (const char *)wCString;
+
+	for (size_t i = 0; i < size; ++i)
+	{
+		result[i] = *pCString;
+		pCString = (const char *)((size_t)pCString + sizeof(wchar_t));
+	}
+
+	return make_shared<string>(result);
+}
+
+const wchar_t * toWCString(const string & string)
+{
+	return 0x0;
+}
+
 void onNtCreateFile()
 {
-	printf("[library] File creation intercepted!\n");
+	shared_ptr<CONTEXT> context;
+	void * possibleStr;
+	void * retrievedStr;
+
+	cout << "[library] File creation intercepted!" << endl;
+
+	return;
+
+	context = getContext();
+	//cout << "[library] RSP: " << COUT_HEX_32 << context->Rsp << endl;
+	//cout << "[library] R15: " << COUT_HEX_32 << context->R15 << endl;
+
+	possibleStr = (char*)context->R15;
+	//cout << "[library] Possible string pointer: " << COUT_HEX_32 << possibleStr << endl;
+
+	const size_t initialOffset = 0xE0;
+	size_t offset;
+	for (size_t i = 0; i < (512 / 8); ++i)
+	{
+		offset = initialOffset + i * 8;
+		retrievedStr = (char*)(*(size_t*)(context->Rsp + offset));
+
+		if ((size_t)retrievedStr == (size_t)possibleStr)
+			break;
+	}
+
+	/*cout << "[library] -> RSP + 0x" << COUT_HEX_32 << offset << ": 0x" <<
+		retrievedStr << endl;*/
+
+	cout << "Create file: " << *toString((wchar_t*)retrievedStr).get() << endl;
 }
 
 void onNtWriteFile()

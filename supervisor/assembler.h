@@ -1,9 +1,9 @@
 #ifndef _ASSEMBLER_H_
 #define _ASSEMBLER_H_
 
-#include "macros.h"
 #include "typedef.h"
-#include "runtime-exception.h"
+#include "../shared/runtime-exception.h"
+#include "../shared/macros.h"
 
 typedef unsigned short Register;
 typedef byte OpCode;

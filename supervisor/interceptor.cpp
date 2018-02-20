@@ -33,8 +33,8 @@ void Interceptor::run()
 		this->injector->getRemoteFunctionAddress(this->dll_paquet, "onNtWriteFile") << endl;
 
 	this->interceptSyscall("NtCreateFile", "onNtCreateFile");
-	this->interceptSyscall("NtWriteFile", "onNtWriteFile");
-	this->interceptSyscall("NtClose", "onNtClose");
+	//this->interceptSyscall("NtWriteFile", "onNtWriteFile");
+	//this->interceptSyscall("NtClose", "onNtClose");
 }
 
 void Interceptor::interceptSyscall(const string & syscallName, const string & callbackName)
@@ -71,14 +71,9 @@ void Interceptor::interceptSyscall(const string & syscallName, const string & ca
 	cave->getRawData()[i++] = addRSP30[3];
 	i += Assembler::writePop(cave->getRawData(), i, Assembler::RAX);
 
-	// TODO: unstable call near implementation
-	//Assembler::writeCallNear(cave->getRawData(), 0x0, cave->getCaveAddress(), callbackAddress);
-
 	this->injector->injectCodeCave(cave);
 
 	//cout << "[parent] Code cave address: 0x" << COUT_HEX_32 << cave->getCaveAddress() << endl;
 	cout << "[parent] Installed interception for \"" << syscallName <<
 		"\", redirecting to \"" << callbackName << "\"" << endl;
-
-	//cin.get();
 }

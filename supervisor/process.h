@@ -6,10 +6,10 @@
 #include <memory>
 #include <windows.h>
 #include <psapi.h>
-#include "macros.h"
 #include "typedef.h"
-#include "runtime-exception.h"
 #include "util.h"
+#include "../shared/runtime-exception.h"
+#include "../shared/macros.h"
 
 class Process
 {
