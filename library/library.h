@@ -24,6 +24,8 @@ std::shared_ptr<CONTEXT> getContext();
 std::shared_ptr<std::string> toString(const wchar_t * wCString);
 const wchar_t * toWCString(const std::string & string);
 
+std::shared_ptr<std::string> cleansePathString(std::shared_ptr<std::string> path);
+
 API void onNtCreateFile();
 API void onNtWriteFile();
 API void onNtClose();
