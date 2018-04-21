@@ -45,14 +45,13 @@ int run(int argc, char* argv[])
 
 	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
 
-	shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
+	//shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
+	shared_ptr<Process> process = make_shared<Process>("notepad.exe");
 	Interceptor interceptor = Interceptor(process);
 
 	process->start(true);
 
 	interceptor.run();
-
-	//cin.get();
 
 	process->resume();
 	this_thread::sleep_for(chrono::milliseconds(250));

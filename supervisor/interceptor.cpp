@@ -27,12 +27,7 @@ void Interceptor::run()
 	cout << "[parent] paquet.dll injected at base address:  0x" <<
 		COUT_HEX_32 << this->dll_paquet->getBaseAddress() << endl;
 
-	/*cout << "[parent] Function address: 0x" <<
-		this->injector->getRemoteFunctionAddress(dll, "onNtCreateFile") << endl;*/
-	cout << "[parent] Function address: 0x" <<
-		this->injector->getRemoteFunctionAddress(this->dll_paquet, "onNtWriteFile") << endl;
-
-	this->interceptSyscall("NtCreateFile", "onNtCreateFile");
+	//this->interceptSyscall("NtCreateFile", "onNtCreateFile");
 	//this->interceptSyscall("NtWriteFile", "onNtWriteFile");
 	//this->interceptSyscall("NtClose", "onNtClose");
 }

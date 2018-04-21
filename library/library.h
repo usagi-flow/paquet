@@ -11,6 +11,7 @@
 #include <psapi.h>
 #include "../shared/runtime-exception.h"
 #include "../shared/macros.h"
+#include "../detours/detours.h"
 
 #define API extern "C" __declspec(dllexport)
 
@@ -18,6 +19,17 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
 
 void onDLLAttached();
 void onDLLDetached();
+
+void createInterceptions();
+
+HANDLE interceptedCreateFileA(
+	LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+HANDLE interceptedCreateFileW(
+	LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 
 std::shared_ptr<CONTEXT> getContext();
 

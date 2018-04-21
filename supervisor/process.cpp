@@ -58,6 +58,10 @@ void Process::start(bool startSuspended)
 	char ** environment = 0x0;
 	char * currentDirectory = 0x0;
 	STARTUPINFO startupInfo;
+	string nameString = this->name;
+	char * nameCopy = new char[nameString.size() + 1];
+
+	nameString.copy(nameCopy, nameString.size());
 
 	memset(&startupInfo, 0, sizeof(startupInfo));
 
@@ -68,9 +72,11 @@ void Process::start(bool startSuspended)
 	cout << "[parent] Spawning child... (flags: 0x" << COUT_HEX << creationFlags << ")" << endl;
 #endif
 
-	success = CreateProcess(this->name, 0x0, 0x0, 0x0,
+	success = CreateProcess(0x0, nameCopy, 0x0, 0x0,
 		inheritHandles, creationFlags, environment, currentDirectory,
 		&startupInfo, &(this->processInfo));
+
+	delete[] nameCopy;
 
 	if (!success)
 		throw RuntimeException("Could not create the child process");

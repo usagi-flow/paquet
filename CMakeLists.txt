@@ -20,6 +20,18 @@ target_link_libraries(wintest Psapi)
 add_executable(child child/child.cpp)
 
 add_library(paquet SHARED library/library.cpp
-	shared/runtime-exception.cpp)
+	shared/runtime-exception.cpp
+
+	detours/detours.cpp
+	detours/modules.cpp
+	detours/disasm.cpp
+	detours/image.cpp
+	detours/creatwth.cpp
+	detours/disolx86.cpp
+	detours/disolx64.cpp
+	detours/disolia64.cpp
+	detours/disolarm.cpp
+	detours/disolarm64.cpp)
+target_link_libraries(paquet Psapi)
 
 add_library(codelib SHARED codelib/codelib.cpp)

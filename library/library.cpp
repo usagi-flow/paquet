@@ -5,6 +5,15 @@ using namespace std;
 HMODULE ownHModule;
 MODULEINFO ownModuleInfo;
 
+static HANDLE(WINAPI * baseCreateFileA)(
+	LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile) = CreateFileA;
+static HANDLE(WINAPI * baseCreateFileW)(
+	LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile) = CreateFileW;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	//printf("[library] Resuming execution in 2s...\n");
@@ -54,6 +63,8 @@ void onDLLAttached()
 		return;
 	}
 
+	createInterceptions();
+
 	/*printf("[library] Module base:          0x%08x\n", ownModuleInfo.lpBaseOfDll);
 	printf("[library] Module entry point:   0x%08x\n", ownModuleInfo.EntryPoint);
 	printf("[library] Module size:          0x%08x\n", ownModuleInfo.SizeOfImage);*/
@@ -62,6 +73,66 @@ void onDLLAttached()
 void onDLLDetached()
 {
 	printf("[library] DLL_PROCESS_DETACH\n");
+}
+
+void createInterceptions()
+{
+	long error;
+
+	if (DetourIsHelperProcess())
+	{
+		cout << "[library] The process is a helper process" << endl;
+		return;
+	}
+
+	cout << "[library] Creating interceptions" << endl;
+
+	DetourRestoreAfterWith();
+	DetourTransactionBegin();
+	DetourUpdateThread(GetCurrentThread());
+	DetourAttach(&(PVOID&)baseCreateFileA, interceptedCreateFileA);
+	DetourAttach(&(PVOID&)baseCreateFileW, interceptedCreateFileW);
+	error = DetourTransactionCommit();
+
+	//MessageBox(0x0, "paquet.dll installed successfully.", "[Interception] DLL_PROCESS_ATTACH", MB_OK);
+	if (error == NO_ERROR)
+	{
+		//MessageBox(0x0, "paquet.dll installed successfully.", "[Interception] DLL_PROCESS_ATTACH", MB_OK);
+		cout << "[library] Interception successful" << endl;
+	}
+	else
+	{
+		//MessageBox(0x0, "paquet.dll installed with errors.", "[Interception] DLL_PROCESS_ATTACH", MB_OK);
+		cerr << "[library] Interception failed" << endl;
+	}
+}
+
+HANDLE interceptedCreateFileA(
+	LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
+{
+	cout << "[library] File creation (CreateFileA) intercepted: " << lpFileName << endl;
+
+	MessageBox(0x0, lpFileName, "[Interception] CreateFileA", MB_OK);
+
+	return baseCreateFileA(lpFileName, dwDesiredAccess, dwShareMode,
+		lpSecurityAttributes, dwCreationDisposition,
+		dwFlagsAndAttributes, hTemplateFile);
+}
+
+HANDLE interceptedCreateFileW(
+	LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+	LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+	DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
+{
+	cout << "[library] File creation (CreateFileW) intercepted: " << *toString(lpFileName) << endl;
+
+	MessageBox(0x0, toString(lpFileName)->c_str(), "[Interception] CreateFileW", MB_OK);
+
+	return baseCreateFileW(lpFileName, dwDesiredAccess, dwShareMode,
+		lpSecurityAttributes, dwCreationDisposition,
+		dwFlagsAndAttributes, hTemplateFile);
 }
 
 shared_ptr<CONTEXT> getContext()
@@ -143,6 +214,7 @@ shared_ptr<string> cleansePathString(shared_ptr<string> path)
 
 void onNtCreateFile()
 {
+	return;
 	shared_ptr<CONTEXT> context;
 	void * possibleStr;
 	void * retrievedStr;
@@ -181,6 +253,7 @@ void onNtCreateFile()
 	path = cleansePathString(toString((wchar_t*)retrievedStr));
 
 	cout << "[library] Create file: " << *path << endl;
+	//MessageBox(0x0, path->c_str(), "[Interception] NtCreateFile", MB_OK);
 }
 
 void onNtWriteFile()
