@@ -6,6 +6,16 @@ CMakeFiles
 cmake_install.cmake
 Makefile
 
+# compiled output (core)
 *.exe
 *.dll
 *.stackdump
+
+# compiled output (application)
+/application/dist
+/application/dist-server
+/application/tmp
+/application/out-tsc
+
+# dependencies
+node_modules
