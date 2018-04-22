@@ -94,7 +94,6 @@ void createInterceptions()
 	DetourAttach(&(PVOID&)baseCreateFileW, interceptedCreateFileW);
 	error = DetourTransactionCommit();
 
-	//MessageBox(0x0, "paquet.dll installed successfully.", "[Interception] DLL_PROCESS_ATTACH", MB_OK);
 	if (error == NO_ERROR)
 	{
 		//MessageBox(0x0, "paquet.dll installed successfully.", "[Interception] DLL_PROCESS_ATTACH", MB_OK);
@@ -114,9 +113,7 @@ HANDLE interceptedCreateFileA(
 {
 	cout << "[library] File creation (CreateFileA) intercepted: " << lpFileName << endl;
 
-	MessageBox(0x0, lpFileName, "[Interception] CreateFileA", MB_OK);
-
-	return baseCreateFileA(lpFileName, dwDesiredAccess, dwShareMode,
+	return interceptedCreateFileW(StringUtilities::toWString(lpFileName)->c_str(), dwDesiredAccess, dwShareMode,
 		lpSecurityAttributes, dwCreationDisposition,
 		dwFlagsAndAttributes, hTemplateFile);
 }
@@ -128,7 +125,10 @@ HANDLE interceptedCreateFileW(
 {
 	cout << "[library] File creation (CreateFileW) intercepted: " << *toString(lpFileName) << endl;
 
-	MessageBox(0x0, toString(lpFileName)->c_str(), "[Interception] CreateFileW", MB_OK);
+	if (StringUtilities::endsWith(lpFileName, L"file.txt"))
+	{
+		MessageBoxW(0x0, lpFileName, L"[Interception] CreateFileW", MB_OK);
+	}
 
 	return baseCreateFileW(lpFileName, dwDesiredAccess, dwShareMode,
 		lpSecurityAttributes, dwCreationDisposition,
@@ -198,18 +198,12 @@ const wchar_t * toWCString(const string & string)
 
 shared_ptr<string> cleansePathString(shared_ptr<string> path)
 {
-	string prefix = "\\??\\";
+	const string prefix = "\\??\\";
 
-	if (path->compare(0, prefix.size(), prefix) == 0x0)
-	{
-		//cout << "[library] Prefix found" << endl;
+	if (StringUtilities::startsWith(*path, prefix))
 		return make_shared<string>(path->substr(prefix.size(), path->size() - prefix.size()));
-	}
 	else
-	{
-		//cout << "[library] Prefix not found" << endl;
 		return path;
-	}
 }
 
 void onNtCreateFile()

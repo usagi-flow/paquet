@@ -45,6 +45,8 @@ int run(int argc, char* argv[])
 
 	cout << "[parent] PID: " << pid << " (0x" << hex << uppercase << pid << ")" << endl;
 
+	setlocale(LC_ALL, "");
+
 	//shared_ptr<Process> process = make_shared<Process>(".\\child.exe");
 	shared_ptr<Process> process = make_shared<Process>("notepad.exe");
 	Interceptor interceptor = Interceptor(process);

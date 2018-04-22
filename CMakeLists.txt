@@ -14,12 +14,14 @@ add_executable(wintest main.cpp
 	supervisor/codecave.cpp
 	supervisor/assembler.cpp
 	supervisor/util.cpp
+	shared/string-utilities.cpp
 	shared/runtime-exception.cpp)
 target_link_libraries(wintest Psapi)
 
 add_executable(child child/child.cpp)
 
 add_library(paquet SHARED library/library.cpp
+	shared/string-utilities.cpp
 	shared/runtime-exception.cpp
 
 	detours/detours.cpp

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <windows.h>
 #include <psapi.h>
+#include "../shared/string-utilities.h"
 #include "../shared/runtime-exception.h"
 #include "../shared/macros.h"
 #include "../detours/detours.h"
