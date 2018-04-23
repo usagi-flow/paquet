@@ -1,4 +1,4 @@
 #!/bin/sh
 
-#PORT=3000 npm run watch
-PORT=3000 npm run serve
+rm -f paquet-ipc
+PORT=3000 npm run watch
