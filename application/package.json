@@ -58,7 +58,7 @@
 		"@types/morgan": "^1.7.35",
 		"@types/node": "^9.3.0",
 		"concurrently": "^3.5.1",
-		"node-sass": "^4.7.2",
+		"node-sass": "^4.13.1",
 		"nodemon": "^1.14.11",
 		"shelljs": "^0.8.0",
 		"ts-node": "^4.1.0",
